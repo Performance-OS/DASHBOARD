@@ -9,6 +9,8 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
+      - name: Check out the repo (so strava-sync.js actually exists to run)
+        uses: actions/checkout@v4
       - name: Sync every connected Strava account
         env:
           STRAVA_CLIENT_ID: ${{ secrets.STRAVA_CLIENT_ID }}
