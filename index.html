@@ -267,7 +267,7 @@
   <header>
     <div>
       <h1 class="display">Splits</h1>
-      <p id="subhead">Strava &middot; Bedok, Singapore</p>
+      <p id="subhead">Strava</p>
     </div>
     <div class="countdown-wrap">
       <div class="countdown">
@@ -923,11 +923,12 @@ function computeDerived(){
 
 function renderLog(){
   const {avg4wk, thisWeek, peakWeek} = computeDerived();
+  const longestRecent = weeklyData.recent.length ? Math.max(...weeklyData.recent.map(r=>r.km)) : 0;
   document.getElementById('statGrid').innerHTML = `
     <div class="stat"><div class="v">${thisWeek.km.toFixed(1)}</div><div class="k">This week (km)</div></div>
     <div class="stat"><div class="v">${avg4wk.toFixed(1)}</div><div class="k">4-wk avg (km)</div></div>
     <div class="stat"><div class="v">${peakWeek.km.toFixed(1)}</div><div class="k">Peak week</div></div>
-    <div class="stat"><div class="v">42.3</div><div class="k">Marathon PB (km)</div></div>
+    <div class="stat"><div class="v">${longestRecent.toFixed(1)}</div><div class="k">Longest recent run (km)</div></div>
   `;
   const ctx = document.getElementById('weeklyChart');
   try{
@@ -2185,7 +2186,7 @@ function visibleRoutineItems(runDay){
   return [
     { id:'hydrate', title:'Hydrate with sea salt', why:'Rehydration supports neuronal ion flow after a night without water.',
       time:'First thing' },
-    { id:'stretch', title:'Stretch \u2014 calf + lumbar focus', why:'Directly targets your calf tightness and lumbar findings, every day, run day or not.',
+    { id:'stretch', title:'Stretch \u2014 calf + lumbar focus', why:'A daily mobility habit that helps catch tightness early, before it turns into a bigger issue \u2014 run day or not.',
       time:'Every morning' },
     runDay
       ? { id:'runwalk', title:'Outdoor run, no sunglasses', why:'Optic flow lowers amygdala activity/anxiety; morning sunlight locks in healthy cortisol timing.',
