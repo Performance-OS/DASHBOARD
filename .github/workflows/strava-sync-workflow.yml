@@ -1,0 +1,18 @@
+name: Strava Sync
+
+on:
+  schedule:
+    - cron: '0 */4 * * *'   # every 4 hours - covers everyone connected in one run
+  workflow_dispatch: {}       # lets you trigger it manually from the Actions tab too
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync every connected Strava account
+        env:
+          STRAVA_CLIENT_ID: ${{ secrets.STRAVA_CLIENT_ID }}
+          STRAVA_CLIENT_SECRET: ${{ secrets.STRAVA_CLIENT_SECRET }}
+          SUPABASE_URL: 'https://mefuldlvyaorzulrnnyx.supabase.co'
+          SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1lZnVsZGx2eWFvcnp1bHJubnl4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1NzU2OTYsImV4cCI6MjEwMzE1MTY5Nn0.Rc1GVIg_1AFZjHIS6P9zqTHukamvOUSP0-IBTIui7vY'
+        run: node strava-sync.js
