@@ -567,6 +567,15 @@
     </div>
 
     <div class="card">
+      <h2>Strava <span class="flag" id="stravaStatusFlag" style="background:rgba(163,163,163,0.14);color:#A3A3A3;border-color:rgba(163,163,163,0.35);">checking&hellip;</span></h2>
+      <p class="note" style="margin-top:0;">Connects to your own Strava account &mdash; your data stays under your own passcode, separate from anyone else using this dashboard.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
+        <button class="feel-btn" id="connectStravaBtn" style="padding:9px 18px;">Connect to Strava</button>
+        <button class="feel-btn" id="disconnectStravaBtn" style="padding:9px 18px;display:none;color:var(--redline);">Disconnect</button>
+      </div>
+    </div>
+
+    <div class="card">
       <h2>Backup Your Data</h2>
       <p class="note" style="margin-top:0;">A local safety net on top of syncing &mdash; useful before clearing browser data, or if you ever want an offline copy. Download a backup occasionally, and you can restore it here later.</p>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
@@ -581,6 +590,10 @@
 
 <script>
 let weeklyData = {"weekly": [{"week": "2025-11-24", "km": 38.4, "runs": 5}, {"week": "2025-12-01", "km": 44.2, "runs": 6}, {"week": "2025-12-08", "km": 52.9, "runs": 8}, {"week": "2025-12-15", "km": 35.6, "runs": 6}, {"week": "2025-12-22", "km": 12.9, "runs": 4}, {"week": "2025-12-29", "km": 65.4, "runs": 7}, {"week": "2026-01-12", "km": 4.0, "runs": 1}, {"week": "2026-02-02", "km": 20.7, "runs": 3}, {"week": "2026-02-09", "km": 12.2, "runs": 2}, {"week": "2026-02-16", "km": 18.4, "runs": 3}, {"week": "2026-02-23", "km": 2.5, "runs": 1}, {"week": "2026-03-02", "km": 26.3, "runs": 3}, {"week": "2026-03-09", "km": 25.9, "runs": 4}, {"week": "2026-03-16", "km": 10.5, "runs": 3}, {"week": "2026-03-30", "km": 26.6, "runs": 2}, {"week": "2026-04-06", "km": 3.7, "runs": 1}, {"week": "2026-04-13", "km": 9.4, "runs": 2}, {"week": "2026-04-20", "km": 9.4, "runs": 2}, {"week": "2026-04-27", "km": 17.5, "runs": 3}, {"week": "2026-05-04", "km": 7.8, "runs": 2}, {"week": "2026-05-11", "km": 5.2, "runs": 1}, {"week": "2026-06-01", "km": 10.4, "runs": 2}, {"week": "2026-06-08", "km": 26.0, "runs": 4}, {"week": "2026-06-15", "km": 19.1, "runs": 3}, {"week": "2026-06-22", "km": 20.9, "runs": 3}, {"week": "2026-07-06", "km": 7.5, "runs": 2}, {"week": "2026-07-13", "km": 4.0, "runs": 1}, {"week": "2026-07-20", "km": 18.9, "runs": 3}, {"week": "2026-07-27", "km": 4.7, "runs": 1}, {"week": "2026-08-03", "km": 6.4, "runs": 1}, {"week": "2026-08-10", "km": 5.1, "runs": 1}, {"week": "2026-08-17", "km": 0.0, "runs": 0}], "recent": [{"date": "2026-08-10", "km": 5.07, "time_s": 1553, "pace": "5:06"}, {"date": "2026-08-09", "km": 6.42, "time_s": 2022, "pace": "5:15"}, {"date": "2026-08-01", "km": 4.67, "time_s": 1987, "pace": "7:05"}, {"date": "2026-07-25", "km": 5.29, "time_s": 1998, "pace": "6:18"}, {"date": "2026-07-24", "km": 5.63, "time_s": 2022, "pace": "5:59"}, {"date": "2026-07-21", "km": 8.01, "time_s": 2876, "pace": "5:59"}, {"date": "2026-07-17", "km": 4.0, "time_s": 1555, "pace": "6:28"}, {"date": "2026-07-11", "km": 2.87, "time_s": 2133, "pace": "12:24"}, {"date": "2026-07-09", "km": 4.68, "time_s": 1692, "pace": "6:02"}, {"date": "2026-06-28", "km": 5.07, "time_s": 2037, "pace": "6:42"}]};
+// ^ This is now just the fallback shown before the first real Strava sync ever runs, or if
+// the sync happens to be temporarily unavailable. loadStravaSnapshot() below overwrites both
+// this and thisWeekActivities with whatever the GitHub Action last wrote to Supabase.
+
 
 const DEFAULT_RACE_DATE = '2026-12-06';
 
@@ -963,16 +976,36 @@ function renderWeekCalendar(activities){
   document.getElementById('weekCalendar').innerHTML = html;
 }
 
-const thisWeekActivities = [];
-const SNAPSHOT_TIME = "23 Aug 2026";
+let thisWeekActivities = [];
+let stravaSyncedAt = null; // set by loadStravaSnapshot() if a real synced timestamp is found
+
+// Reads whatever the GitHub Action last wrote to Supabase (see the strava-sync workflow) and
+// overwrites the hardcoded fallback data above with it. If nothing's synced yet (Action hasn't
+// run, or hasn't been set up), the fallback data quietly stays in place - nothing breaks.
+async function loadStravaSnapshot(){
+  try{
+    const r = await storageGetSafe('strava_snapshot');
+    if(!r) return;
+    const snap = JSON.parse(r.value);
+    if(snap.weekly_data) weeklyData = snap.weekly_data;
+    if(snap.this_week_activities) thisWeekActivities = snap.this_week_activities;
+    if(snap.synced_at) stravaSyncedAt = snap.synced_at;
+  }catch(e){ console.warn('Could not load Strava snapshot - showing the last-known fallback data instead:', e); }
+}
 
 function initStatusBar(){
   const dot = document.getElementById('statusDot');
   const txt = document.getElementById('statusText');
   dot.className = 'dot';
-  txt.textContent = 'Snapshot from ' + SNAPSHOT_TIME;
+  if(stravaSyncedAt){
+    const d = new Date(stravaSyncedAt);
+    txt.textContent = 'Synced from Strava ' + d.toLocaleDateString('en-GB',{day:'numeric',month:'short'}) + ' ' + d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+  } else {
+    txt.textContent = 'Showing fallback data \u2014 no Strava sync found yet';
+    dot.classList.add('err');
+  }
   document.getElementById('refreshBtn').addEventListener('click', ()=>{
-    txt.textContent = 'To update: ask Claude in this chat to "refresh the dashboard with my latest Strava data."';
+    txt.textContent = 'Syncs automatically in the background \u2014 nothing to press. Check the strava-sync Action in GitHub if this looks stale.';
   });
 }
 
@@ -994,6 +1027,59 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const supabaseClient = (typeof window.supabase !== 'undefined' && SUPABASE_URL.startsWith('http'))
   ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
   : null;
+
+// ---- Strava connect: one shared app registration (Client ID is not secret - Strava's own
+// docs treat it as public, only the Client Secret needs to stay hidden, which is why that
+// lives in the Supabase Edge Function instead of here). Each person who clicks "Connect to
+// Strava" authorizes their own account; the callback function stores the result under
+// whichever passcode initiated it, so everyone's data stays separate automatically.
+const STRAVA_CLIENT_ID = '256060';
+const STRAVA_OAUTH_CALLBACK_URL = 'https://mefuldlvyaorzulrnnyx.supabase.co/functions/v1/strava-oauth-callback';
+
+function connectStrava(){
+  const redirectUri = encodeURIComponent(STRAVA_OAUTH_CALLBACK_URL);
+  const state = encodeURIComponent(ACTIVE_PASSCODE);
+  const url = `https://www.strava.com/oauth/authorize?client_id=${STRAVA_CLIENT_ID}&redirect_uri=${redirectUri}&response_type=code&approval_prompt=auto&scope=activity:read_all&state=${state}`;
+  window.location.href = url;
+}
+async function disconnectStrava(){
+  if(!confirm('Disconnect Strava? Your existing training data stays exactly as it is - this just stops future automatic syncing until you reconnect.')) return;
+  await storageDeleteSafe('strava_auth');
+  await refreshStravaStatus();
+}
+async function refreshStravaStatus(){
+  const flag = document.getElementById('stravaStatusFlag');
+  const connectBtn = document.getElementById('connectStravaBtn');
+  const disconnectBtn = document.getElementById('disconnectStravaBtn');
+  try{
+    const r = await storageGetSafe('strava_auth');
+    if(r){
+      const auth = JSON.parse(r.value);
+      const since = auth.connected_at ? new Date(auth.connected_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '';
+      flag.textContent = since ? `Connected since ${since}` : 'Connected';
+      flag.style.background = 'rgba(79,174,132,0.14)'; flag.style.color = 'var(--track)'; flag.style.borderColor = 'rgba(79,174,132,0.35)';
+      connectBtn.style.display = 'none';
+      disconnectBtn.style.display = 'inline-block';
+    } else {
+      flag.textContent = 'Not connected';
+      flag.style.background = 'rgba(163,163,163,0.14)'; flag.style.color = '#A3A3A3'; flag.style.borderColor = 'rgba(163,163,163,0.35)';
+      connectBtn.style.display = 'inline-block';
+      disconnectBtn.style.display = 'none';
+    }
+  }catch(e){ console.warn('Could not check Strava connection status:', e); }
+}
+// Strava redirects back here with ?strava=connected or ?strava=error after the OAuth dance -
+// show a quick confirmation, then clean the URL so refreshing doesn't re-trigger the message.
+function handleStravaRedirectResult(){
+  const params = new URLSearchParams(window.location.search);
+  const result = params.get('strava');
+  if(!result) return;
+  if(result === 'connected') showStorageWarning('Strava connected! Your data will sync in the background within a few hours.');
+  else if(result === 'error') showStorageWarning('Strava connection didn\u2019t go through - try "Connect to Strava" again.');
+  const url = new URL(window.location.href);
+  url.searchParams.delete('strava');
+  window.history.replaceState({}, '', url.toString());
+}
 
 // ---- Passcode gate: a lightweight (not secure) way to give the same person's data the
 // same "row" across devices, without building real accounts/login. Remembered per-browser
@@ -2576,6 +2662,9 @@ async function initHabits(){
   renderHabitEditor();
 
   document.getElementById('changePasscodeBtn').addEventListener('click', changeSyncPasscode);
+  document.getElementById('connectStravaBtn').addEventListener('click', connectStrava);
+  document.getElementById('disconnectStravaBtn').addEventListener('click', disconnectStrava);
+  refreshStravaStatus();
   document.getElementById('exportBackupBtn').addEventListener('click', exportAllData);
   document.getElementById('importBackupBtn').addEventListener('click', ()=> document.getElementById('importBackupInput').click());
   document.getElementById('importBackupInput').addEventListener('change', importAllData);
@@ -2583,6 +2672,12 @@ async function initHabits(){
 
 (async function(){
   await initPasscodeGate(); // blocks here until a passcode is set - nothing should load or save before that
+  try{
+    handleStravaRedirectResult();
+  }catch(e){ console.error('handleStravaRedirectResult failed:', e); }
+  try{
+    await loadStravaSnapshot();
+  }catch(e){ console.error('loadStravaSnapshot failed:', e); }
   try{
     renderLog();
   }catch(e){ console.error('renderLog failed:', e); }
