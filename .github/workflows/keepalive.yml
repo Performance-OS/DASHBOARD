@@ -1,0 +1,16 @@
+name: Keep Supabase Awake
+
+on:
+  schedule:
+    - cron: '0 8 */3 * *'
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase to prevent free-tier auto-pause
+        run: |
+          curl -s -X GET "https://mefuldlvyaorzulrnnyx.supabase.co/rest/v1/kv_store?select=key&limit=1" \
+            -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1lZnVsZGx2eWFvcnp1bHJubnl4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1NzU2OTYsImV4cCI6MjEwMzE1MTY5Nn0.Rc1GVIg_1AFZjHIS6P9zqTHukamvOUSP0-IBTIui7vY" \
+            -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1lZnVsZGx2eWFvcnp1bHJubnl4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1NzU2OTYsImV4cCI6MjEwMzE1MTY5Nn0.Rc1GVIg_1AFZjHIS6P9zqTHukamvOUSP0-IBTIui7vY"
