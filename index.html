@@ -355,7 +355,12 @@
 
   <!-- MARATHON PLAN VIEW -->
   <div class="view" id="view-plan">
-    <div class="card">
+    <div class="card" id="planOnboardingCard" style="display:none;">
+      <h2>Set Up Your Training Plan</h2>
+      <p class="note" style="margin-top:0;">No plan yet on this passcode. Pick a goal below and a full progressive plan gets generated for you &mdash; build phase, taper, race day, sized to however much time you give it.</p>
+    </div>
+
+    <div class="card" id="raceSetupCard" style="display:none;">
       <h2>Race Setup <button id="resetMarathonPlanBtn" class="feel-btn" style="float:right;color:var(--rust);">Reset Plan</button></h2>
       <div class="field-row">
         <div class="field">
@@ -374,7 +379,7 @@
 
     <div class="card">
       <h2>Training Block <span class="flag" id="activeGoalTypeFlag">Marathon</span></h2>
-      <p class="note" style="margin-top:0;">Your zones, plan table, and Home tab all follow whichever block is active. Only one is active at a time &mdash; start a new one when you're ready to switch distances, and the current block gets archived, not deleted.</p>
+      <p class="note" style="margin-top:0;" id="trainingBlockIntro">Your zones, plan table, and Home tab all follow whichever block is active. Only one is active at a time &mdash; start a new one when you're ready to switch distances, and the current block gets archived, not deleted.</p>
       <button class="feel-btn" id="toggleNewBlockForm">Start New Training Block</button>
       <div id="newBlockForm" style="display:none;margin-top:16px;padding-top:16px;border-top:1px solid var(--line);">
         <div class="field-row">
@@ -410,8 +415,8 @@
       <div id="archivedBlocksList"><p class="note" style="margin:0;">Nothing archived yet.</p></div>
     </div>
 
-    <div class="card">
-      <h2>Training Plan <span class="flag">built with you \u2014 fully editable</span></h2>
+    <div class="card" id="trainingPlanCard" style="display:none;">
+      <h2>Training Plan <span class="flag">built with you — fully editable</span></h2>
       <div class="legend">
         <span><i style="background:var(--track)"></i>Easy</span>
         <span><i style="background:var(--telemetry)"></i>Tempo</span>
@@ -462,7 +467,7 @@
         </div>
       </div>
       <canvas id="liftHistoryChart" style="display:none;"></canvas>
-      <p class="note" id="liftHistoryEmpty">No sets logged yet for this exercise \u2014 log a weight above and it'll show up here.</p>
+      <p class="note" id="liftHistoryEmpty">No sets logged yet for this exercise — log a weight above and it'll show up here.</p>
       <p class="note" id="liftHistorySummary"></p>
       <p class="note">Dot colour shows how it felt: <span style="color:var(--track);">green = easy</span>, <span style="color:var(--accent);">amber = right</span>, <span style="color:var(--clay);">terracotta = hard</span>. Exercises with a fixed rep count show <strong>estimated 1RM</strong> instead of raw weight, so progress is comparable even if the number of reps ever changes. The table below shows every individual set logged (e.g. 20/20/18kg), most recent first.</p>
       <div class="table-wrap" id="liftSetLogWrap" style="display:none;margin-top:14px;">
@@ -589,10 +594,12 @@
 </div>
 
 <script>
-let weeklyData = {"weekly": [{"week": "2025-11-24", "km": 38.4, "runs": 5}, {"week": "2025-12-01", "km": 44.2, "runs": 6}, {"week": "2025-12-08", "km": 52.9, "runs": 8}, {"week": "2025-12-15", "km": 35.6, "runs": 6}, {"week": "2025-12-22", "km": 12.9, "runs": 4}, {"week": "2025-12-29", "km": 65.4, "runs": 7}, {"week": "2026-01-12", "km": 4.0, "runs": 1}, {"week": "2026-02-02", "km": 20.7, "runs": 3}, {"week": "2026-02-09", "km": 12.2, "runs": 2}, {"week": "2026-02-16", "km": 18.4, "runs": 3}, {"week": "2026-02-23", "km": 2.5, "runs": 1}, {"week": "2026-03-02", "km": 26.3, "runs": 3}, {"week": "2026-03-09", "km": 25.9, "runs": 4}, {"week": "2026-03-16", "km": 10.5, "runs": 3}, {"week": "2026-03-30", "km": 26.6, "runs": 2}, {"week": "2026-04-06", "km": 3.7, "runs": 1}, {"week": "2026-04-13", "km": 9.4, "runs": 2}, {"week": "2026-04-20", "km": 9.4, "runs": 2}, {"week": "2026-04-27", "km": 17.5, "runs": 3}, {"week": "2026-05-04", "km": 7.8, "runs": 2}, {"week": "2026-05-11", "km": 5.2, "runs": 1}, {"week": "2026-06-01", "km": 10.4, "runs": 2}, {"week": "2026-06-08", "km": 26.0, "runs": 4}, {"week": "2026-06-15", "km": 19.1, "runs": 3}, {"week": "2026-06-22", "km": 20.9, "runs": 3}, {"week": "2026-07-06", "km": 7.5, "runs": 2}, {"week": "2026-07-13", "km": 4.0, "runs": 1}, {"week": "2026-07-20", "km": 18.9, "runs": 3}, {"week": "2026-07-27", "km": 4.7, "runs": 1}, {"week": "2026-08-03", "km": 6.4, "runs": 1}, {"week": "2026-08-10", "km": 5.1, "runs": 1}, {"week": "2026-08-17", "km": 0.0, "runs": 0}], "recent": [{"date": "2026-08-10", "km": 5.07, "time_s": 1553, "pace": "5:06"}, {"date": "2026-08-09", "km": 6.42, "time_s": 2022, "pace": "5:15"}, {"date": "2026-08-01", "km": 4.67, "time_s": 1987, "pace": "7:05"}, {"date": "2026-07-25", "km": 5.29, "time_s": 1998, "pace": "6:18"}, {"date": "2026-07-24", "km": 5.63, "time_s": 2022, "pace": "5:59"}, {"date": "2026-07-21", "km": 8.01, "time_s": 2876, "pace": "5:59"}, {"date": "2026-07-17", "km": 4.0, "time_s": 1555, "pace": "6:28"}, {"date": "2026-07-11", "km": 2.87, "time_s": 2133, "pace": "12:24"}, {"date": "2026-07-09", "km": 4.68, "time_s": 1692, "pace": "6:02"}, {"date": "2026-06-28", "km": 5.07, "time_s": 2037, "pace": "6:42"}]};
-// ^ This is now just the fallback shown before the first real Strava sync ever runs, or if
-// the sync happens to be temporarily unavailable. loadStravaSnapshot() below overwrites both
-// this and thisWeekActivities with whatever the GitHub Action last wrote to Supabase.
+let weeklyData = {"weekly": [], "recent": []};
+// ^ Neutral by design: this only ever shows before a real Strava sync has happened for this
+// passcode (a brand new user who hasn't connected yet, or the rare case a sync fails). It used
+// to be pre-filled with one specific person's real historical numbers, which looked like real
+// (but wrong) data to anyone else opening this for the first time. loadStravaSnapshot() below
+// overwrites this with whatever the GitHub Action last actually synced for this passcode.
 
 
 const DEFAULT_RACE_DATE = '2026-12-06';
@@ -609,7 +616,9 @@ const ZONE_OFFSETS_BY_GOAL_TYPE = {
   '5K':     { easy: 70, long: 85, tempo: 13,  interval: -6  },
 };
 let goalTypeGlobal = 'Marathon';
-async function loadGoalType(){ try{ const r = await storageGetSafe('goal_type'); return r ? r.value : 'Marathon'; }catch(e){ return 'Marathon'; } }
+// Returns null (not a default) if this passcode has genuinely never set a goal type -
+// that's how initPlan() tells "a brand new passcode" apart from "an existing Marathon plan".
+async function loadGoalType(){ try{ const r = await storageGetSafe('goal_type'); return r ? r.value : null; }catch(e){ return null; } }
 async function saveGoalType(v){ await storageSetSafe('goal_type', v); }
 
 async function loadPlanArchive(){ try{ const r = await storageGetSafe('plan_archive_v1'); return r?JSON.parse(r.value):[]; }catch(e){ return []; } }
@@ -906,9 +915,9 @@ const FEEL_COLORS = { Easy:'#6EA88C', Right:'#E07A4A', Hard:'#C9633F' };
 
 function computeDerived(){
   const last4 = weeklyData.weekly.slice(-4);
-  const avg4wk = last4.length ? last4.reduce((a,w)=>a+w.km,0)/last4.length : 10;
+  const avg4wk = last4.length ? last4.reduce((a,w)=>a+w.km,0)/last4.length : 0;
   const thisWeek = weeklyData.weekly[weeklyData.weekly.length-1] || {km:0};
-  const peakWeek = weeklyData.weekly.reduce((a,w)=>w.km>a.km?w:a, weeklyData.weekly[0]);
+  const peakWeek = weeklyData.weekly.length ? weeklyData.weekly.reduce((a,w)=>w.km>a.km?w:a, weeklyData.weekly[0]) : {km:0};
   return {avg4wk, thisWeek, peakWeek};
 }
 
@@ -1838,13 +1847,15 @@ async function initPlan(){
   strengthSessionCompletion = await loadStrengthSessionCompletion();
   initStrengthSessionLogger();
 
-  goalTypeGlobal = await loadGoalType();
-  document.getElementById('activeGoalTypeFlag').textContent = goalTypeGlobal;
+  const goalTypeRaw = await loadGoalType(); // null = this passcode has never set one up
+  const isBrandNewPasscode = (goalTypeRaw === null);
+  goalTypeGlobal = goalTypeRaw || 'Marathon'; // still need a sane internal value even pre-setup
+  document.getElementById('activeGoalTypeFlag').textContent = isBrandNewPasscode ? 'Not set up' : goalTypeGlobal;
   const planNavBtn = document.querySelector('nav button[data-view="plan"]');
-  if(planNavBtn) planNavBtn.textContent = `${goalTypeGlobal} Plan`;
+  if(planNavBtn) planNavBtn.textContent = isBrandNewPasscode ? 'Plan' : `${goalTypeGlobal} Plan`;
 
   let raceDate = await loadVal('race_date');
-  if(!raceDate) raceDate = DEFAULT_RACE_DATE;
+  if(!raceDate) raceDate = isBrandNewPasscode ? '' : DEFAULT_RACE_DATE;
   document.getElementById('raceDate').value = raceDate;
   let goalTime = await loadVal('goal_time');
   if(!goalTime) goalTime = '3:45:00';
@@ -1852,11 +1863,22 @@ async function initPlan(){
 
   let marathonPlan = await loadMarathonPlan();
   if(!marathonPlan || !Array.isArray(marathonPlan) || marathonPlan.length === 0){
-    marathonPlan = goalTypeGlobal === 'Marathon' ? JSON.parse(JSON.stringify(DEFAULT_MARATHON_PLAN)) : generateFullPlan(goalTypeGlobal, raceDate);
+    // A brand new passcode gets a genuinely empty plan and an onboarding prompt below - NOT
+    // this app's original hand-built Marathon plan or its real race date. Those stay reserved
+    // for an existing Marathon-goal passcode explicitly using Reset, never a fresh one.
+    marathonPlan = isBrandNewPasscode ? [] : (goalTypeGlobal === 'Marathon' ? JSON.parse(JSON.stringify(DEFAULT_MARATHON_PLAN)) : generateFullPlan(goalTypeGlobal, raceDate));
   }
   const sessionCompletion = await loadSessionCompletion();
   marathonPlanGlobal = marathonPlan;
   sessionCompletionGlobal = sessionCompletion;
+
+  document.getElementById('planOnboardingCard').style.display = isBrandNewPasscode ? 'block' : 'none';
+  document.getElementById('raceSetupCard').style.display = isBrandNewPasscode ? 'none' : 'block';
+  document.getElementById('trainingPlanCard').style.display = isBrandNewPasscode ? 'none' : 'block';
+  if(isBrandNewPasscode){
+    document.getElementById('trainingBlockIntro').textContent = 'Pick a goal type, race date, and goal time below to generate your first plan.';
+    document.getElementById('toggleNewBlockForm').textContent = 'Set Up My Plan';
+  }
 
   let currentZones = null; // recomputed by renderZones(), read by session cards for pace display
 
@@ -2081,7 +2103,7 @@ async function initPlan(){
   newBlockToggle.addEventListener('click', ()=>{
     const showing = newBlockForm.style.display === 'block';
     newBlockForm.style.display = showing ? 'none' : 'block';
-    newBlockToggle.textContent = showing ? 'Start New Training Block' : 'Cancel';
+    newBlockToggle.textContent = showing ? (isBrandNewPasscode ? 'Set Up My Plan' : 'Start New Training Block') : 'Cancel';
     if(!showing){
       document.getElementById('newBlockGoalType').value = goalTypeGlobal;
       document.getElementById('newBlockRaceDate').value = document.getElementById('raceDate').value;
@@ -2094,18 +2116,22 @@ async function initPlan(){
     const newRaceDate = document.getElementById('newBlockRaceDate').value;
     const newGoalTime = document.getElementById('newBlockGoalTime').value.trim();
     if(!newRaceDate || !newGoalTime){ alert('Fill in both the race date and goal finish time first.'); return; }
-    if(!confirm(`Archive your current ${goalTypeGlobal} block and start a fresh ${newGoalType} block for ${newRaceDate}? Nothing is deleted \u2014 your current plan, dates, and completions move to the archive.`)) return;
 
-    const archive = await loadPlanArchive();
-    archive.push({
-      goalType: goalTypeGlobal,
-      raceDate: document.getElementById('raceDate').value,
-      goalTime: document.getElementById('goalTime').value,
-      plan: marathonPlanGlobal,
-      sessionCompletion: sessionCompletionGlobal,
-      archivedAt: new Date().toISOString(),
-    });
-    await savePlanArchive(archive);
+    if(isBrandNewPasscode){
+      if(!confirm(`Set up a ${newGoalType} plan for ${newRaceDate}?`)) return;
+    } else {
+      if(!confirm(`Archive your current ${goalTypeGlobal} block and start a fresh ${newGoalType} block for ${newRaceDate}? Nothing is deleted \u2014 your current plan, dates, and completions move to the archive.`)) return;
+      const archive = await loadPlanArchive();
+      archive.push({
+        goalType: goalTypeGlobal,
+        raceDate: document.getElementById('raceDate').value,
+        goalTime: document.getElementById('goalTime').value,
+        plan: marathonPlanGlobal,
+        sessionCompletion: sessionCompletionGlobal,
+        archivedAt: new Date().toISOString(),
+      });
+      await savePlanArchive(archive);
+    }
 
     await storageSetSafe('marathon_plan_v2', JSON.stringify(
       document.getElementById('newBlockBlankToggle').checked
