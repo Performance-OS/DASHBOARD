@@ -1848,8 +1848,14 @@ async function initPlan(){
   strengthSessionCompletion = await loadStrengthSessionCompletion();
   initStrengthSessionLogger();
 
-  const goalTypeRaw = await loadGoalType(); // null = this passcode has never set one up
-  const isBrandNewPasscode = (goalTypeRaw === null);
+  const goalTypeRaw = await loadGoalType();
+  // goal_type alone isn't a reliable "is this truly brand new" signal: an established account
+  // (like the very first one this app was built around) can have been running on this file's
+  // own built-in Marathon defaults the whole time, without goal_type/race_date/marathon_plan_v2
+  // ever actually being explicitly saved. Checking for ANY data at all under this passcode is
+  // what correctly tells an established account apart from a genuinely fresh one.
+  const hasAnyData = await passcodeHasExistingData(ACTIVE_PASSCODE);
+  const isBrandNewPasscode = (goalTypeRaw === null) && !hasAnyData;
   goalTypeGlobal = goalTypeRaw || 'Marathon'; // still need a sane internal value even pre-setup
   document.getElementById('activeGoalTypeFlag').textContent = isBrandNewPasscode ? 'Not set up' : goalTypeGlobal;
   const planNavBtn = document.querySelector('nav button[data-view="plan"]');
