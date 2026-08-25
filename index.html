@@ -169,6 +169,10 @@
   .ex-suggestion{font-size:9px;color:var(--track);margin-top:4px;text-align:right;line-height:1.35;}
   .ex-feel{display:flex;gap:5px;justify-content:flex-end;margin-top:5px;}
   .feel-btn{background:rgba(255,255,255,0.05);border:1px solid var(--line);color:var(--text-dim);font-size:9px;padding:3px 9px;border-radius:20px;cursor:pointer;font-family:'Inter',sans-serif;letter-spacing:0.06em;transition:all .15s ease;}
+  .day-toggle{position:relative;cursor:pointer;}
+  .day-toggle input{position:absolute;opacity:0;width:0;height:0;}
+  .day-toggle span{display:inline-block;padding:6px 12px;border-radius:20px;background:rgba(255,255,255,0.05);border:1px solid var(--line);color:var(--text-dim);font-size:11px;transition:all .15s ease;}
+  .day-toggle input:checked + span{background:rgba(224,122,74,0.18);border-color:rgba(224,122,74,0.55);color:#fff;}
   .feel-btn:hover{border-color:rgba(255,255,255,0.25);color:#fff;}
   .feel-btn.feel-active{background:rgba(224,122,74,0.18);color:#fff;border-color:rgba(224,122,74,0.55);font-weight:500;}
   .mp-total{font-family:'IBM Plex Mono',monospace;font-weight:500;color:var(--accent);white-space:nowrap;}
@@ -396,12 +400,86 @@
             <label>Race date</label>
             <input type="date" id="newBlockRaceDate">
           </div>
+        </div>
+
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-dim);cursor:pointer;margin:14px 0 8px;">
+          <input type="checkbox" id="newBlockJustFinish">
+          I don't have a target time &mdash; just want to finish
+        </label>
+        <div class="field-row" id="newBlockGoalTimeRow">
           <div class="field">
             <label>Goal finish time</label>
             <input type="text" id="newBlockGoalTime" placeholder="h:mm:ss">
           </div>
         </div>
-        <p class="note">This archives your current block &mdash; plan, dates, completions, nothing lost &mdash; and generates a full progressive plan for the new goal: build phase, periodic deload weeks, taper, and race day, sized to fit however many weeks are left. Starting volume is calibrated from your recent Strava mileage where possible. It's a solid structural starting point, not a substitute for fine-tuning together in chat once you're actually in it.</p>
+        <div class="field-row" id="newBlockEasyPaceRow" style="display:none;">
+          <div class="field">
+            <label>Current comfortable pace (min/km)</label>
+            <input type="text" id="newBlockEasyPace" placeholder="e.g. 6:30">
+          </div>
+        </div>
+        <div class="field-row" id="newBlockPushPaceRow" style="display:none;">
+          <div class="field">
+            <label>5K push pace right now, if you raced one today (min/km)</label>
+            <input type="text" id="newBlockPushPace" placeholder="e.g. 5:15 (optional)">
+          </div>
+        </div>
+        <p class="note" id="newBlockRealismNote" style="display:none;"></p>
+
+        <div class="field" style="margin-top:14px;">
+          <label>Experience level</label>
+          <select id="newBlockExperience">
+            <option value="new">New to structured training</option>
+            <option value="consistent" selected>Consistent training, 6+ months</option>
+            <option value="experienced">Multiple races completed</option>
+          </select>
+        </div>
+
+        <div class="field" style="margin-top:14px;">
+          <label>Days you can train</label>
+          <div id="newBlockAvailableDays" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
+            <label class="day-toggle"><input type="checkbox" value="Mon" checked><span>Mon</span></label>
+            <label class="day-toggle"><input type="checkbox" value="Tue" checked><span>Tue</span></label>
+            <label class="day-toggle"><input type="checkbox" value="Wed"><span>Wed</span></label>
+            <label class="day-toggle"><input type="checkbox" value="Thu" checked><span>Thu</span></label>
+            <label class="day-toggle"><input type="checkbox" value="Fri"><span>Fri</span></label>
+            <label class="day-toggle"><input type="checkbox" value="Sat" checked><span>Sat</span></label>
+            <label class="day-toggle"><input type="checkbox" value="Sun"><span>Sun</span></label>
+          </div>
+        </div>
+
+        <div class="field" style="margin-top:14px;">
+          <label>Preferred long run day</label>
+          <select id="newBlockLongDay">
+            <option value="Mon">Monday</option>
+            <option value="Tue">Tuesday</option>
+            <option value="Wed">Wednesday</option>
+            <option value="Thu">Thursday</option>
+            <option value="Fri">Friday</option>
+            <option value="Sat" selected>Saturday</option>
+            <option value="Sun">Sunday</option>
+          </select>
+        </div>
+
+        <div class="field" style="margin-top:14px;">
+          <label>Any of these you're managing right now?</label>
+          <div id="newBlockInjuries" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
+            <label class="day-toggle"><input type="checkbox" value="lowerback"><span>Lower back</span></label>
+            <label class="day-toggle"><input type="checkbox" value="knee"><span>Knee</span></label>
+            <label class="day-toggle"><input type="checkbox" value="calf"><span>Achilles/calf</span></label>
+            <label class="day-toggle"><input type="checkbox" value="hip"><span>Hip</span></label>
+            <label class="day-toggle"><input type="checkbox" value="shin"><span>Shin</span></label>
+            <label class="day-toggle"><input type="checkbox" value="itband"><span>IT band</span></label>
+          </div>
+          <p class="note" style="margin-top:6px;">Leave all unchecked if none apply. Anything checked here caps peak volume a bit lower and stretches out the easy base phase &mdash; it doesn't remove sessions, just paces the ramp more conservatively.</p>
+        </div>
+
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-dim);cursor:pointer;margin:14px 0;">
+          <input type="checkbox" id="newBlockLifting" checked>
+          Also strength training regularly alongside this
+        </label>
+
+        <p class="note">This archives your current block &mdash; plan, dates, completions, nothing lost &mdash; and generates a full progressive plan for the new goal, tailored to what you've entered above: build phase, periodic deload weeks, taper, and race day, sized to fit however many weeks are left. Starting volume is calibrated from your recent Strava mileage where possible. It's a solid, personalized starting point, not a substitute for fine-tuning together in chat once you're actually in it.</p>
         <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-dim);cursor:pointer;margin-bottom:12px;">
           <input type="checkbox" id="newBlockBlankToggle">
           Start with a blank table instead (build the plan in chat)
@@ -632,6 +710,52 @@ function mondayOnOrBefore(dateStr){
 }
 // A blank week-by-week scaffold (all rest days) from this week through race week, so a new
 // block has real table rows to fill in - actual session content still gets added via chat.
+// For someone without a target finish time: converts their entered "comfortable pace" into
+// an implied goal time, by reversing the same easy-pace offset used everywhere else, so the
+// rest of the pace-zone system (which is all built around a goal time) keeps working unchanged.
+function deriveGoalTimeFromEasyPace(easyPaceStr, goalType){
+  const parts = String(easyPaceStr).split(':').map(Number);
+  const easyPaceSec = (parts[0]||0)*60 + (parts[1]||0);
+  const off = ZONE_OFFSETS_BY_GOAL_TYPE[goalType] || ZONE_OFFSETS_BY_GOAL_TYPE.Marathon;
+  const impliedGoalPaceSec = Math.max(120, easyPaceSec - off.easy);
+  const dist = GOAL_TYPE_DISTANCES[goalType] || GOAL_TYPE_DISTANCES.Marathon;
+  const goalSec = Math.round(impliedGoalPaceSec * dist);
+  const h = Math.floor(goalSec/3600), m = Math.floor((goalSec%3600)/60), s = goalSec%60;
+  return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+// Looks for a genuine hard effort in recent training, not just "the fastest run" - a single
+// easy run that happens to be a little quicker than the others isn't a race effort, it's
+// day-to-day noise. Requires the fastest run to be meaningfully quicker (12%+) than the
+// typical (median) pace across recent runs, and at least 4 runs to have a real median at all.
+// Returns null when there's genuinely no usable signal, rather than guessing from weak data.
+function findRealisticEffort(recentRuns){
+  if(!recentRuns || recentRuns.length < 4) return null;
+  const paces = recentRuns
+    .map(r => ({ paceSecPerKm: r.time_s / r.km, km: r.km }))
+    .filter(r => isFinite(r.paceSecPerKm) && r.paceSecPerKm > 0);
+  if(paces.length < 4) return null;
+  const sorted = paces.map(r=>r.paceSecPerKm).slice().sort((a,b)=>a-b);
+  const median = sorted[Math.floor(sorted.length/2)];
+  const fastest = paces.reduce((min,r)=> r.paceSecPerKm < min.paceSecPerKm ? r : min, paces[0]);
+  if(fastest.paceSecPerKm < median * 0.88){
+    return { paceSecPerKm: fastest.paceSecPerKm, distanceKm: fastest.km };
+  }
+  return null;
+}
+
+// Riegel's formula: a well-established way to project a realistic time at one distance from
+// a genuine result at another. Exponent 1.06 is the standard fatigue factor from Riegel's
+// original research, used by most race-time calculators.
+function riegelPredict(knownTimeSec, knownDistanceKm, targetDistanceKm){
+  return knownTimeSec * Math.pow(targetDistanceKm/knownDistanceKm, 1.06);
+}
+function fmtHMS(totalSec){
+  totalSec = Math.round(totalSec);
+  const h = Math.floor(totalSec/3600), m = Math.floor((totalSec%3600)/60), s = totalSec%60;
+  return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
 function generateBlankPlanWeeks(raceDateStr){
   const weeks = [];
   let monday = mondayOnOrBefore(toLocalISO(new Date()));
@@ -660,19 +784,49 @@ const PLAN_TEMPLATES = {
   '10K':    { idealWeeks:10, taperWeeks:1, peakWeeklyKm:35, peakLongKm:13, fiveDayCapable:false, qualityMix:['Interval','Tempo'] },
   '5K':     { idealWeeks:8,  taperWeeks:1, peakWeeklyKm:28, peakLongKm:10, fiveDayCapable:false, qualityMix:['Interval','Tempo'] },
 };
-const RUN_DAY_SETS = { 3:['Tue','Thu','Sat'], 4:['Tue','Wed','Thu','Sat'], 5:['Tue','Wed','Thu','Sat','Sun'] };
 
-function runDayCountForVolume(weekKm, peakKm, fiveDayCapable){
+// Picks `count` run days spread across whichever days are actually available, rather than
+// assuming a fixed Tue/Thu/Sat pattern. Guarantees the preferred long-run day is included
+// (swapping one out if it wasn't already picked), and always returns the long day last -
+// buildBaseWeek/buildStructuredWeek rely on that ordering (last = long, first = quality day).
+function pickRunDays(availableDays, count, preferredLongDay){
+  const pool = DAY_KEYS.filter(dk => availableDays.includes(dk));
+  if(pool.length === 0) return ['Tue','Thu','Sat']; // safety net - shouldn't happen, form requires 3+ days
+  count = Math.min(count, pool.length);
+  let picked = [];
+  if(count >= pool.length){
+    picked = pool.slice();
+  } else {
+    for(let i=0; i<count; i++){
+      const idx = Math.round(i * (pool.length-1) / Math.max(1, count-1));
+      if(!picked.includes(pool[idx])) picked.push(pool[idx]);
+    }
+    for(const dk of pool){ if(picked.length >= count) break; if(!picked.includes(dk)) picked.push(dk); }
+  }
+  let longDay = availableDays.includes(preferredLongDay) ? preferredLongDay : picked[picked.length-1];
+  if(!picked.includes(longDay)){
+    picked.pop();
+    picked.push(longDay);
+  }
+  picked.sort((a,b)=>DAY_KEYS.indexOf(a)-DAY_KEYS.indexOf(b));
+  const withoutLong = picked.filter(dk=>dk!==longDay);
+  return [...withoutLong, longDay];
+}
+
+function runDayCountForVolume(weekKm, peakKm, fiveDayCapable, maxDays, experienceLevel){
   const ratio = peakKm>0 ? weekKm/peakKm : 0;
-  if(fiveDayCapable && ratio>0.8) return 5;
-  if(ratio>0.45) return 4;
+  const experienceCap = experienceLevel === 'new' ? 4 : 5;
+  const cap = Math.max(3, Math.min(maxDays, fiveDayCapable ? experienceCap : Math.min(4, experienceCap)));
+  if(cap>=5 && ratio>0.8) return 5;
+  if(cap>=4 && ratio>0.45) return 4;
   return 3;
 }
 
-function buildBaseWeek(monday, weekKm){
+function buildBaseWeek(monday, weekKm, availableDays, preferredLongDay){
   const days = { Mon:REST_DAY, Tue:REST_DAY, Wed:REST_DAY, Thu:REST_DAY, Fri:REST_DAY, Sat:REST_DAY, Sun:REST_DAY };
   const longKm = Math.max(5, Math.round(weekKm*0.3));
-  const slots = RUN_DAY_SETS[weekKm>20 ? 4 : 3];
+  const nDays = Math.max(3, Math.min(availableDays.length, weekKm>20 ? 4 : 3));
+  const slots = pickRunDays(availableDays, nDays, preferredLongDay);
   const longDay = slots[slots.length-1];
   const easyDays = slots.slice(0,-1);
   days[longDay] = d('Easy', longKm, 'Base building \u2014 easy effort, a bit longer than the midweek runs');
@@ -682,10 +836,11 @@ function buildBaseWeek(monday, weekKm){
 }
 
 function buildStructuredWeek(opts){
-  const { monday, goalType, weekKm, longKm, qualityType, isFinalRaceWeek, raceDateStr, peakWeeklyKm, fiveDayCapable } = opts;
+  const { monday, goalType, weekKm, longKm, qualityType, isFinalRaceWeek, raceDateStr, peakWeeklyKm,
+          fiveDayCapable, availableDays, preferredLongDay, experienceLevel } = opts;
   const days = { Mon:REST_DAY, Tue:REST_DAY, Wed:REST_DAY, Thu:REST_DAY, Fri:REST_DAY, Sat:REST_DAY, Sun:REST_DAY };
-  const nDays = runDayCountForVolume(weekKm, peakWeeklyKm, fiveDayCapable);
-  const slots = RUN_DAY_SETS[nDays];
+  const nDays = runDayCountForVolume(weekKm, peakWeeklyKm, fiveDayCapable, availableDays.length, experienceLevel);
+  const slots = pickRunDays(availableDays, nDays, preferredLongDay);
   const longDay = slots[slots.length-1];
   const qualityDay = slots[0];
   const easyDays = slots.slice(1,-1);
@@ -703,12 +858,12 @@ function buildStructuredWeek(opts){
       ? d('Tempo', qualityKm, `Easy warm-up, ${Math.max(2,qualityKm-3)}km @ tempo pace, easy cooldown`)
       : d('Interval', qualityKm, `Easy warm-up, intervals @ interval pace with jog recovery, easy cooldown`);
     const remainingEasyKm = Math.max(3*easyDays.length, weekKm - longKm - qualityKm);
-    const perEasyDay = Math.min(longKm, Math.max(3, Math.round(remainingEasyKm/Math.max(1,easyDays.length)))); // never let a midweek easy run outsize the long run
+    const perEasyDay = Math.min(longKm, Math.max(3, Math.round(remainingEasyKm/Math.max(1,easyDays.length))));
     easyDays.forEach(dk=>{ days[dk] = d('Easy', perEasyDay, 'Conversational effort throughout'); });
   } else {
     const easySlots = [qualityDay, ...easyDays];
     const remainingEasyKm = Math.max(3*easySlots.length, weekKm - longKm);
-    const perEasyDay = Math.min(longKm, Math.max(3, Math.round(remainingEasyKm/easySlots.length))); // never let a midweek easy run outsize the long run
+    const perEasyDay = Math.min(longKm, Math.max(3, Math.round(remainingEasyKm/easySlots.length)));
     easySlots.forEach(dk=>{ days[dk] = d('Easy', perEasyDay, 'Conversational effort throughout'); });
   }
 
@@ -728,12 +883,34 @@ function buildStructuredWeek(opts){
 }
 
 // Generates a full progressive plan: build -> periodic deload -> taper -> race, sized to
-// whatever time is actually available. If there's more time than the goal type's ideal
-// template needs, the extra weeks become gentle base-building before the structured block
-// starts. Starting volume is calibrated from your recent actual Strava mileage when there's
-// enough of it to trust; otherwise a generic per-distance starting point.
-function generateFullPlan(goalType, raceDateStr){
+// whatever time is actually available, and shaped by a real athlete profile rather than a
+// one-size formula: experience level shifts the whole progression curve and how many days
+// get used per week; flagged injuries cap peak volume lower and stretch the easy base phase;
+// lifting concurrently trims peak volume slightly further; available days and a preferred
+// long-run day directly drive which days sessions land on. Starting volume is calibrated
+// from actual recent Strava mileage when there's enough of it to trust.
+function generateFullPlan(goalType, raceDateStr, profile){
+  profile = profile || {};
+  const availableDays = (profile.availableDays && profile.availableDays.length>=3) ? profile.availableDays : ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const preferredLongDay = profile.preferredLongDay || 'Sat';
+  const experienceLevel = profile.experienceLevel || 'consistent';
+  const injuryFlags = profile.injuryFlags || [];
+  const lifting = !!profile.lifting;
+
   const tmpl = PLAN_TEMPLATES[goalType] || PLAN_TEMPLATES.Marathon;
+
+  let peakKmMultiplier = 1;
+  if(injuryFlags.length > 0) peakKmMultiplier *= 0.85;
+  if(lifting) peakKmMultiplier *= 0.93;
+  const peakWeeklyKm = Math.round(tmpl.peakWeeklyKm * peakKmMultiplier);
+  const peakLongKm = Math.round(tmpl.peakLongKm * (injuryFlags.length>0 ? 0.9 : 1));
+
+  let easyBaseFraction = 0.3; // fraction of the build phase that stays pure-easy before quality sessions start
+  if(experienceLevel === 'new') easyBaseFraction += 0.15;
+  if(experienceLevel === 'experienced') easyBaseFraction -= 0.1;
+  if(injuryFlags.length > 0) easyBaseFraction += 0.1;
+  easyBaseFraction = Math.min(0.6, Math.max(0.15, easyBaseFraction));
+
   const mondayStart = mondayOnOrBefore(toLocalISO(new Date()));
   const raceMonday = mondayOnOrBefore(raceDateStr);
   const totalWeeks = Math.round((new Date(raceMonday) - new Date(mondayStart)) / (7*86400000)) + 1;
@@ -744,16 +921,17 @@ function generateFullPlan(goalType, raceDateStr){
 
   const recentKms = weeklyData.weekly.slice(-6).map(w=>w.km).filter(k=>k>0);
   const recentAvg = recentKms.length ? recentKms.reduce((a,b)=>a+b,0)/recentKms.length : null;
-  const genericStart = { Marathon:25, Half:18, '10K':14, '5K':12 }[goalType] || 20;
-  const startKm = Math.round(recentAvg ? Math.max(genericStart*0.5, Math.min(recentAvg, tmpl.peakWeeklyKm*0.7)) : genericStart);
+  let genericStart = { Marathon:25, Half:18, '10K':14, '5K':12 }[goalType] || 20;
+  if(experienceLevel === 'new') genericStart = Math.round(genericStart*0.7);
+  const startKm = Math.round(recentAvg ? Math.max(genericStart*0.5, Math.min(recentAvg, peakWeeklyKm*0.7)) : genericStart);
 
   const weeks = [];
   let monday = mondayStart;
 
   for(let i=0; i<baseWeeks; i++){
     const frac = baseWeeks<=1 ? 1 : i/(baseWeeks-1);
-    const km = Math.round(startKm + (tmpl.peakWeeklyKm*0.55 - startKm) * frac * 0.6);
-    weeks.push(buildBaseWeek(monday, Math.max(startKm, km)));
+    const km = Math.round(startKm + (peakWeeklyKm*0.55 - startKm) * frac * 0.6);
+    weeks.push(buildBaseWeek(monday, Math.max(startKm, km), availableDays, preferredLongDay));
     monday = addDays(monday, 7);
   }
 
@@ -766,19 +944,19 @@ function generateFullPlan(goalType, raceDateStr){
     if(isTaper){
       const taperPos = w - buildWeeks;
       const taperFrac = tmpl.taperWeeks<=1 ? 0 : taperPos/(tmpl.taperWeeks-1);
-      weekKm = Math.round(tmpl.peakWeeklyKm * (isFinalRaceWeek ? 0.35 : (0.75 - 0.25*taperFrac)));
+      weekKm = Math.round(peakWeeklyKm * (isFinalRaceWeek ? 0.35 : (0.75 - 0.25*taperFrac)));
     } else {
       const buildFrac = buildWeeks<=1 ? 1 : w/(buildWeeks-1);
-      weekKm = Math.round(startKm + (tmpl.peakWeeklyKm - startKm) * buildFrac);
+      weekKm = Math.round(startKm + (peakWeeklyKm - startKm) * buildFrac);
       if((w+1)%4===0 && w!==buildWeeks-1) weekKm = Math.round(weekKm*0.75); // deload every 4th build week
     }
-    const longKm = Math.round(Math.min(tmpl.peakLongKm, weekKm*0.36));
-    const inEasyBasePhase = !isTaper && w < buildWeeks*0.3;
+    const longKm = Math.round(Math.min(peakLongKm, weekKm*0.36));
+    const inEasyBasePhase = !isTaper && w < buildWeeks*easyBaseFraction;
     const qualityType = inEasyBasePhase ? null : tmpl.qualityMix[qualityIdx % tmpl.qualityMix.length];
     if(qualityType) qualityIdx++;
     weeks.push(buildStructuredWeek({
       monday, goalType, weekKm, longKm, qualityType, isTaper, isFinalRaceWeek, raceDateStr,
-      peakWeeklyKm: tmpl.peakWeeklyKm, fiveDayCapable: tmpl.fiveDayCapable,
+      peakWeeklyKm, fiveDayCapable: tmpl.fiveDayCapable, availableDays, preferredLongDay, experienceLevel,
     }));
     monday = addDays(monday, 7);
   }
@@ -1299,7 +1477,7 @@ async function saveCustomExercises(p){ await storageSetSafe('custom_exercises', 
 
 const ALL_BACKUP_KEYS = [
   'marathon_plan_v2','session_completion','strength_session_completion','strength_log','strength_goals',
-  'custom_exercises','race_date','goal_time','goal_type','plan_archive_v1',
+  'custom_exercises','race_date','goal_time','goal_type','plan_archive_v1','plan_profile',
   'habit_log','custom_habit_items','pain_log'
 ];
 
@@ -2115,14 +2293,77 @@ async function initPlan(){
       document.getElementById('newBlockGoalType').value = goalTypeGlobal;
       document.getElementById('newBlockRaceDate').value = document.getElementById('raceDate').value;
       document.getElementById('newBlockGoalTime').value = document.getElementById('goalTime').value;
+
+      // Let them know up front whether there's enough real training data to sanity-check
+      // their goal automatically, or whether it's worth adding a push-pace estimate manually.
+      const effort = findRealisticEffort(weeklyData.recent);
+      const pushRow = document.getElementById('newBlockPushPaceRow');
+      const note = document.getElementById('newBlockRealismNote');
+      if(effort){
+        pushRow.style.display = 'none';
+        note.style.display = 'block';
+        note.textContent = `Found a genuine hard effort in your recent training (${fmtPace(effort.paceSecPerKm)}/km over ${effort.distanceKm.toFixed(1)}km) \u2014 that'll be used to sanity-check your goal time.`;
+      } else {
+        pushRow.style.display = 'flex';
+        note.style.display = 'block';
+        note.textContent = `No clear hard effort in your recent training \u2014 everything's been a similar easy pace. Add a 5K push-pace estimate above if you want your goal sanity-checked, or leave it blank to skip that check.`;
+      }
     }
+  });
+
+  document.getElementById('newBlockJustFinish').addEventListener('change', (e)=>{
+    document.getElementById('newBlockGoalTimeRow').style.display = e.target.checked ? 'none' : 'flex';
+    document.getElementById('newBlockEasyPaceRow').style.display = e.target.checked ? 'flex' : 'none';
   });
 
   document.getElementById('confirmNewBlockBtn').addEventListener('click', async ()=>{
     const newGoalType = document.getElementById('newBlockGoalType').value;
     const newRaceDate = document.getElementById('newBlockRaceDate').value;
-    const newGoalTime = document.getElementById('newBlockGoalTime').value.trim();
-    if(!newRaceDate || !newGoalTime){ alert('Fill in both the race date and goal finish time first.'); return; }
+    const justFinish = document.getElementById('newBlockJustFinish').checked;
+    const enteredGoalTime = document.getElementById('newBlockGoalTime').value.trim();
+    const enteredEasyPace = document.getElementById('newBlockEasyPace').value.trim();
+    const experienceLevel = document.getElementById('newBlockExperience').value;
+    const preferredLongDay = document.getElementById('newBlockLongDay').value;
+    const lifting = document.getElementById('newBlockLifting').checked;
+    const availableDays = Array.from(document.querySelectorAll('#newBlockAvailableDays input:checked')).map(el=>el.value);
+    const injuryFlags = Array.from(document.querySelectorAll('#newBlockInjuries input:checked')).map(el=>el.value);
+
+    if(!newRaceDate){ alert('Pick a race date first.'); return; }
+    if(!justFinish && !enteredGoalTime){ alert('Enter a goal finish time, or check "just want to finish" instead.'); return; }
+    if(justFinish && !enteredEasyPace){ alert('Enter your current comfortable pace so paces can still be calculated.'); return; }
+    if(availableDays.length < 3){ alert('Pick at least 3 available days \u2014 fewer than that isn\u2019t enough to build a coherent plan around.'); return; }
+
+    const newGoalTime = justFinish ? deriveGoalTimeFromEasyPace(enteredEasyPace, newGoalType) : enteredGoalTime;
+
+    // Sanity-check the entered goal against a genuine reference effort, if one exists -
+    // either detected automatically from real training data, or self-reported just now.
+    // This never blocks or auto-corrects anything; it's a heads-up, not a rule.
+    if(!justFinish){
+      let reference = findRealisticEffort(weeklyData.recent);
+      if(!reference){
+        const pushPaceStr = document.getElementById('newBlockPushPace').value.trim();
+        if(pushPaceStr){
+          const parts = pushPaceStr.split(':').map(Number);
+          const paceSec = (parts[0]||0)*60 + (parts[1]||0);
+          if(paceSec > 0) reference = { paceSecPerKm: paceSec, distanceKm: 5 };
+        }
+      }
+      if(reference){
+        const goalDistKm = GOAL_TYPE_DISTANCES[newGoalType] || GOAL_TYPE_DISTANCES.Marathon;
+        const knownTimeSec = reference.paceSecPerKm * reference.distanceKm;
+        const predictedSec = riegelPredict(knownTimeSec, reference.distanceKm, goalDistKm);
+        const enteredSec = parseHMS(newGoalTime);
+        const diffRatio = Math.abs(enteredSec - predictedSec) / predictedSec;
+        if(diffRatio > 0.12){
+          const proceed = confirm(
+            `Based on your recent training, a more realistic ${newGoalType} time right now looks closer to ${fmtHMS(predictedSec)}. ` +
+            `You've entered ${newGoalTime} \u2014 that's a meaningful gap either way.\n\n` +
+            `This isn't a hard rule, just a reality check. Press OK to continue with your entered goal anyway, or Cancel to go back and adjust it.`
+          );
+          if(!proceed) return;
+        }
+      }
+    }
 
     if(isBrandNewPasscode){
       if(!confirm(`Set up a ${newGoalType} plan for ${newRaceDate}?`)) return;
@@ -2140,14 +2381,17 @@ async function initPlan(){
       await savePlanArchive(archive);
     }
 
+    const profile = { experienceLevel, availableDays, preferredLongDay, injuryFlags, lifting, justFinish, easyPace: enteredEasyPace || null };
+
     await storageSetSafe('marathon_plan_v2', JSON.stringify(
       document.getElementById('newBlockBlankToggle').checked
         ? generateBlankPlanWeeks(newRaceDate)
-        : generateFullPlan(newGoalType, newRaceDate)
+        : generateFullPlan(newGoalType, newRaceDate, profile)
     ));
     await saveVal('race_date', newRaceDate);
     await saveVal('goal_time', newGoalTime);
     await storageSetSafe('session_completion', JSON.stringify({}));
+    await storageSetSafe('plan_profile', JSON.stringify(profile));
     await saveGoalType(newGoalType);
 
     alert(`New ${newGoalType} block started. The page will reload.`);
