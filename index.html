@@ -300,8 +300,8 @@
 
   <nav>
     <button class="active" data-view="home">Home</button>
-    <button data-view="plan">Marathon Plan</button>
-    <button data-view="strength">Strength</button>
+    <button data-view="plan">Running Shit</button>
+    <button data-view="strength">Gym Shit</button>
     <button data-view="habits">Habits</button>
   </nav>
 
@@ -529,6 +529,51 @@
 
   <!-- STRENGTH VIEW -->
   <div class="view" id="view-strength">
+    <div class="card">
+      <h2>Set Up Your Strength Program</h2>
+      <p class="note" style="margin-top:0;">Answer a few questions and a program gets generated across the existing Upper / Lower / Core split &mdash; picks appropriate exercises and set/rep ranges for your goal, equipment, and anything you're managing. Replaces your current exercise list below; your logged weight history stays saved under each exercise's name either way.</p>
+      <button class="cta-btn" id="strengthSetupBtn" style="margin-top:12px;">Set Up My Program</button>
+      <div id="strengthSetupForm" style="display:none;margin-top:16px;padding-top:16px;border-top:1px solid var(--line);">
+        <div class="field-row">
+          <div class="field">
+            <label>Main goal</label>
+            <select id="strengthGoal">
+              <option value="general">General fitness</option>
+              <option value="strength">Build strength</option>
+              <option value="hypertrophy">Hypertrophy (muscle &amp; size)</option>
+              <option value="athletic">Athletic performance</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Experience level</label>
+            <select id="strengthExperience">
+              <option value="new">New to lifting</option>
+              <option value="some" selected>Some experience</option>
+              <option value="experienced">Experienced</option>
+            </select>
+          </div>
+        </div>
+        <div class="field" style="margin-top:14px;">
+          <label>Equipment access</label>
+          <select id="strengthEquipment">
+            <option value="fullGym">Full gym (barbells, machines, cables)</option>
+            <option value="limited">Limited (dumbbells &amp; bodyweight only)</option>
+          </select>
+        </div>
+        <div class="field" style="margin-top:14px;">
+          <label>Anything you're managing right now?</label>
+          <div id="strengthInjuries" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
+            <label class="day-toggle"><input type="checkbox" value="lowerback"><span>Lower back</span></label>
+            <label class="day-toggle"><input type="checkbox" value="knee"><span>Knee</span></label>
+            <label class="day-toggle"><input type="checkbox" value="shoulder"><span>Shoulder</span></label>
+            <label class="day-toggle"><input type="checkbox" value="wrist"><span>Wrist</span></label>
+          </div>
+          <p class="note" style="margin-top:6px;">Leave unchecked if none apply. Anything checked here swaps out exercises that tend to aggravate that area for gentler alternatives that train the same muscles.</p>
+        </div>
+        <button class="feel-btn" id="confirmStrengthSetupBtn" style="color:var(--track);margin-top:14px;">Generate My Program</button>
+      </div>
+    </div>
+
     <div class="card">
       <h2>Edit Strength Exercises <button id="toggleExerciseEditor" class="feel-btn" style="float:right;">Edit</button></h2>
       <div id="exerciseEditorBody" style="display:none;margin-top:14px;">
@@ -1482,7 +1527,7 @@ async function saveCustomExercises(p){ await storageSetSafe('custom_exercises', 
 
 const ALL_BACKUP_KEYS = [
   'marathon_plan_v2','session_completion','strength_session_completion','strength_log','strength_goals',
-  'custom_exercises','race_date','goal_time','goal_type','plan_archive_v1','plan_profile',
+  'custom_exercises','race_date','goal_time','goal_type','plan_archive_v1','plan_profile','strength_profile',
   'habit_log','custom_habit_items','pain_log'
 ];
 
@@ -1613,6 +1658,154 @@ function describeQualitySession(role, totalKm, zones, phase){
     return parts.join(', ');
   }
   return '';
+}
+
+// A categorized library the generator picks from, tagged by equipment tier, movement role
+// (compound/accessory/isolation, or just "core" for the Core category), and which body area
+// each exercise tends to aggravate if flagged - used to swap it out rather than exclude it
+// outright, so an injury flag still gets a full, appropriately-loaded session, not a gap.
+const STRENGTH_EXERCISE_LIBRARY = {
+  Upper: {
+    fullGym: {
+      compound: [
+        { name:'Barbell Bench Press', avoid:['shoulder','wrist'] },
+        { name:'Barbell Row', avoid:['lowerback'] },
+        { name:'Overhead Press', avoid:['shoulder'] },
+        { name:'Weighted Pull-Up', avoid:['shoulder'] },
+        { name:'Seated Cable Row', avoid:[] },
+        { name:'Lat Pulldown', avoid:['shoulder'] },
+      ],
+      isolation: [
+        { name:'Bicep Curls', avoid:['wrist'] },
+        { name:'Triceps Pushdown', avoid:['wrist'] },
+        { name:'Lateral Raises', avoid:['shoulder'] },
+        { name:'Face Pulls', avoid:[] },
+      ],
+    },
+    limited: {
+      compound: [
+        { name:'Push-Ups', avoid:['wrist','shoulder'] },
+        { name:'DB Row', avoid:['lowerback'] },
+        { name:'DB Shoulder Press', avoid:['shoulder'] },
+        { name:'Inverted Row', avoid:[] },
+        { name:'Single-Arm DB Row', avoid:['lowerback'] },
+      ],
+      isolation: [
+        { name:'DB Bicep Curls', avoid:['wrist'] },
+        { name:'DB Triceps Extension', avoid:['wrist','shoulder'] },
+        { name:'DB Lateral Raise', avoid:['shoulder'] },
+      ],
+    },
+  },
+  Lower: {
+    fullGym: {
+      compound: [
+        { name:'Barbell Back Squat', avoid:['knee','lowerback'] },
+        { name:'Romanian Deadlift', avoid:['lowerback'] },
+        { name:'Leg Press', avoid:[] },
+        { name:'Bulgarian Split Squat', avoid:['knee'] },
+        { name:'Goblet Squat', avoid:['knee'] },
+      ],
+      accessory: [
+        { name:'Leg Curl', avoid:[] },
+        { name:'Hip Thrust', avoid:['lowerback'] },
+        { name:'Calf Raise', avoid:[] },
+        { name:'Single-Leg Romanian Deadlift', avoid:['lowerback'] },
+      ],
+    },
+    limited: {
+      compound: [
+        { name:'Goblet Squat', avoid:['knee'] },
+        { name:'DB Romanian Deadlift', avoid:['lowerback'] },
+        { name:'Reverse Lunge / Split Squat', avoid:['knee'] },
+      ],
+      accessory: [
+        { name:'Single-Leg Romanian Deadlift', avoid:['lowerback'] },
+        { name:'Hip Thrust / Glute Bridge', avoid:['lowerback'] },
+        { name:'Single-Leg Calf Raise', avoid:[] },
+        { name:'Lateral Band Walks', avoid:['knee'], weighted:false },
+      ],
+    },
+  },
+  Core: {
+    fullGym: {
+      main: [
+        { name:'Pallof Press', avoid:[] },
+        { name:'Hanging Leg Raise', avoid:['lowerback'], weighted:false },
+        { name:'Plank', avoid:[], weighted:false },
+        { name:'Ab Wheel Rollout', avoid:['lowerback'], weighted:false },
+        { name:'Bird Dog', avoid:[], weighted:false },
+      ],
+    },
+    limited: {
+      main: [
+        { name:'Pelvic Tilts', avoid:[], weighted:false },
+        { name:'Bird Dog', avoid:[], weighted:false },
+        { name:'Dead Bug', avoid:[], weighted:false },
+        { name:'Side Plank with Reach-Through', avoid:['shoulder'], weighted:false },
+        { name:'Pallof Press', avoid:[] },
+        { name:'90/90 Hip Stretch', avoid:[], weighted:false },
+      ],
+    },
+  },
+};
+
+// Sets/reps by goal - the standard, well-established rep-range conventions: lower reps and
+// heavier loads for pure strength, moderate-high volume for hypertrophy, higher reps and
+// simpler movements for general fitness, and a strength/power-leaning mix for athletic goals.
+const GOAL_REP_SCHEMES = {
+  general:     { compound:{sets:3, reps:'10-12'}, accessory:{sets:3, reps:12}, isolation:{sets:2, reps:12}, main:{sets:2, reps:'10-12'} },
+  strength:    { compound:{sets:4, reps:5},        accessory:{sets:3, reps:8},  isolation:{sets:3, reps:10}, main:{sets:3, reps:10} },
+  hypertrophy: { compound:{sets:4, reps:10},        accessory:{sets:4, reps:12}, isolation:{sets:3, reps:15}, main:{sets:3, reps:12} },
+  athletic:    { compound:{sets:4, reps:6},         accessory:{sets:3, reps:10}, isolation:{sets:3, reps:12}, main:{sets:3, reps:'10-12'} },
+};
+
+// How many exercises to pull from each role, by experience level - fewer, simpler movements
+// for someone new, more total exercise variety once there's a base of technique to work from.
+const STRENGTH_COUNT_BY_EXPERIENCE = {
+  new:         { compound:2, accessory:1, isolation:1, main:3 },
+  some:        { compound:3, accessory:2, isolation:2, main:4 },
+  experienced: { compound:3, accessory:2, isolation:3, main:4 },
+};
+
+function pickExercisesAvoiding(list, count, injuryFlags){
+  // Rank by how many flagged areas each exercise would aggravate (fewest first), rather than
+  // a binary "fully clean" vs "ignore the flags entirely." When someone has flags in
+  // combination and nothing in a category is perfectly clean for all of them, this still
+  // surfaces whichever options carry the FEWEST conflicts instead of silently disabling the
+  // injury filter altogether - the bug the "everything flagged" stress test caught.
+  const ranked = list.slice().sort((a,b)=>{
+    const aConflicts = a.avoid.filter(x=>injuryFlags.includes(x)).length;
+    const bConflicts = b.avoid.filter(x=>injuryFlags.includes(x)).length;
+    return aConflicts - bConflicts;
+  });
+  return ranked.slice(0, Math.min(count, ranked.length));
+}
+
+// Generates a full Upper/Lower/Core program from a real profile - equipment tier picks which
+// exercise pool to draw from, injury flags swap out anything that tends to aggravate that
+// area, experience level sets how many exercises per session, and goal sets the sets/reps.
+function generateStrengthProgram(profile){
+  const equipment = (profile.equipment === 'limited') ? 'limited' : 'fullGym';
+  const scheme = GOAL_REP_SCHEMES[profile.goal] || GOAL_REP_SCHEMES.general;
+  const counts = STRENGTH_COUNT_BY_EXPERIENCE[profile.experienceLevel] || STRENGTH_COUNT_BY_EXPERIENCE.some;
+  const injuryFlags = profile.injuryFlags || [];
+
+  function buildRole(exList, role, roleKey){
+    const picked = pickExercisesAvoiding(exList, counts[roleKey], injuryFlags);
+    const { sets, reps } = scheme[roleKey];
+    return picked.map(ex => ({ name: ex.name, sets, reps, weighted: ex.weighted !== false }));
+  }
+
+  const upperLib = STRENGTH_EXERCISE_LIBRARY.Upper[equipment];
+  const lowerLib = STRENGTH_EXERCISE_LIBRARY.Lower[equipment];
+  const coreLib = STRENGTH_EXERCISE_LIBRARY.Core[equipment];
+
+  return {
+    Upper: [...buildRole(upperLib.compound, 'compound', 'compound'), ...buildRole(upperLib.isolation, 'isolation', 'isolation')],
+    Lower: [...buildRole(lowerLib.compound, 'compound', 'compound'), ...buildRole(lowerLib.accessory, 'accessory', 'accessory')],
+    Core: buildRole(coreLib.main, 'main', 'main'),
+  };
 }
 
 const DEFAULT_STRENGTH_EXERCISES = {
@@ -1933,6 +2126,35 @@ function initExerciseEditor(){
     if(window._replan) window._replan();
     if(window._replanStrength) window._replanStrength();
   });
+
+  const setupToggle = document.getElementById('strengthSetupBtn');
+  const setupForm = document.getElementById('strengthSetupForm');
+  setupToggle.addEventListener('click', ()=>{
+    const showing = setupForm.style.display === 'block';
+    setupForm.style.display = showing ? 'none' : 'block';
+    setupToggle.textContent = showing ? 'Set Up My Program' : 'Cancel';
+  });
+  document.getElementById('confirmStrengthSetupBtn').addEventListener('click', async ()=>{
+    const goal = document.getElementById('strengthGoal').value;
+    const experienceLevel = document.getElementById('strengthExperience').value;
+    const equipment = document.getElementById('strengthEquipment').value;
+    const injuryFlags = Array.from(document.querySelectorAll('#strengthInjuries input:checked')).map(el=>el.value);
+    if(!confirm('This replaces your current exercise list with a generated program based on your answers. Weight history for each exercise stays saved under its name either way \u2014 if an exercise isn\u2019t in the new program, its history just won\u2019t show, it isn\u2019t deleted. Continue?')) return;
+
+    const profile = { goal, experienceLevel, equipment, injuryFlags };
+    activeExercises = generateStrengthProgram(profile);
+    recomputeExercise1RMReps();
+    await saveCustomExercises(activeExercises);
+    await storageSetSafe('strength_profile', JSON.stringify(profile));
+
+    setupForm.style.display = 'none';
+    setupToggle.textContent = 'Set Up My Program';
+    renderExerciseEditor();
+    if(window._replan) window._replan();
+    if(window._replanStrength) window._replanStrength();
+    showStorageWarning('New strength program generated.', false);
+  });
+
   renderExerciseEditor();
 }
 
@@ -2041,8 +2263,8 @@ async function initPlan(){
   const isBrandNewPasscode = (goalTypeRaw === null) && !hasAnyData;
   goalTypeGlobal = goalTypeRaw || 'Marathon'; // still need a sane internal value even pre-setup
   document.getElementById('activeGoalTypeFlag').textContent = isBrandNewPasscode ? 'Not set up' : goalTypeGlobal;
-  const planNavBtn = document.querySelector('nav button[data-view="plan"]');
-  if(planNavBtn) planNavBtn.textContent = isBrandNewPasscode ? 'Plan' : `${goalTypeGlobal} Plan`;
+  // Nav label stays fixed ("Running Shit") regardless of goal type now - no longer
+  // overwritten with "${goalType} Plan".
 
   let raceDate = await loadVal('race_date');
   if(!raceDate) raceDate = isBrandNewPasscode ? '' : DEFAULT_RACE_DATE;
