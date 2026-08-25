@@ -169,6 +169,10 @@
   .ex-suggestion{font-size:9px;color:var(--track);margin-top:4px;text-align:right;line-height:1.35;}
   .ex-feel{display:flex;gap:5px;justify-content:flex-end;margin-top:5px;}
   .feel-btn{background:rgba(255,255,255,0.05);border:1px solid var(--line);color:var(--text-dim);font-size:9px;padding:3px 9px;border-radius:20px;cursor:pointer;font-family:'Inter',sans-serif;letter-spacing:0.06em;transition:all .15s ease;}
+  .cta-btn{padding:16px 28px;font-size:15px;font-weight:700;border-radius:14px;background:var(--accent);border:1px solid var(--accent);color:#fff;cursor:pointer;font-family:'Inter',sans-serif;letter-spacing:0.02em;box-shadow:0 8px 24px rgba(224,122,74,0.35);transition:all .18s ease;}
+  .cta-btn:hover{background:var(--accent-soft);box-shadow:0 10px 28px rgba(224,122,74,0.45);transform:translateY(-1px);}
+  .strava-btn{padding:18px 32px;font-size:16px;font-weight:700;border-radius:14px;background:#FC4C02;border:1px solid #FC4C02;color:#fff;cursor:pointer;font-family:'Inter',sans-serif;letter-spacing:0.02em;box-shadow:0 8px 26px rgba(252,76,2,0.4);transition:all .18s ease;}
+  .strava-btn:hover{background:#E44502;box-shadow:0 10px 30px rgba(252,76,2,0.5);transform:translateY(-1px);}
   .day-toggle{position:relative;cursor:pointer;}
   .day-toggle input{position:absolute;opacity:0;width:0;height:0;}
   .day-toggle span{display:inline-block;padding:6px 12px;border-radius:20px;background:rgba(255,255,255,0.05);border:1px solid var(--line);color:var(--text-dim);font-size:11px;transition:all .15s ease;}
@@ -310,6 +314,15 @@
     </div>
 
     <div class="card">
+      <h2>Strava <span class="flag" id="stravaStatusFlag" style="background:rgba(163,163,163,0.14);color:#A3A3A3;border-color:rgba(163,163,163,0.35);">checking&hellip;</span></h2>
+      <p class="note" style="margin-top:0;">Connects to your own Strava account &mdash; your data stays under your own passcode, separate from anyone else using this dashboard.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
+        <button class="strava-btn" id="connectStravaBtn">Connect to Strava</button>
+        <button class="feel-btn" id="disconnectStravaBtn" style="padding:9px 18px;display:none;color:var(--redline);">Disconnect</button>
+      </div>
+    </div>
+
+    <div class="card">
       <h2>This Week</h2>
       <div class="stat-grid" id="homeStatGrid"></div>
     </div>
@@ -361,7 +374,8 @@
   <div class="view" id="view-plan">
     <div class="card" id="planOnboardingCard" style="display:none;">
       <h2>Set Up Your Training Plan</h2>
-      <p class="note" style="margin-top:0;">No plan yet on this passcode. Pick a goal below and a full progressive plan gets generated for you &mdash; build phase, taper, race day, sized to however much time you give it.</p>
+      <p class="note" style="margin-top:0;">No plan yet on this passcode. Answer a few quick questions and a full progressive plan gets generated for you &mdash; build phase, taper, race day, sized to however much time you give it.</p>
+      <button class="cta-btn" id="onboardingSetupBtn" style="margin-top:12px;">Set Up My Plan</button>
     </div>
 
     <div class="card" id="raceSetupCard" style="display:none;">
@@ -647,15 +661,6 @@
       <h2>Sync</h2>
       <p class="note" style="margin-top:0;">This device is synced under a passcode &mdash; enter the exact same one on any other device to see the same data there, automatically.</p>
       <button class="feel-btn" id="changePasscodeBtn" style="padding:9px 18px;">Change sync passcode</button>
-    </div>
-
-    <div class="card">
-      <h2>Strava <span class="flag" id="stravaStatusFlag" style="background:rgba(163,163,163,0.14);color:#A3A3A3;border-color:rgba(163,163,163,0.35);">checking&hellip;</span></h2>
-      <p class="note" style="margin-top:0;">Connects to your own Strava account &mdash; your data stays under your own passcode, separate from anyone else using this dashboard.</p>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
-        <button class="feel-btn" id="connectStravaBtn" style="padding:9px 18px;">Connect to Strava</button>
-        <button class="feel-btn" id="disconnectStravaBtn" style="padding:9px 18px;display:none;color:var(--redline);">Disconnect</button>
-      </div>
     </div>
 
     <div class="card">
@@ -2285,6 +2290,10 @@ async function initPlan(){
 
   const newBlockToggle = document.getElementById('toggleNewBlockForm');
   const newBlockForm = document.getElementById('newBlockForm');
+  document.getElementById('onboardingSetupBtn').addEventListener('click', ()=>{
+    if(newBlockForm.style.display !== 'block') newBlockToggle.click();
+    newBlockForm.scrollIntoView({behavior:'smooth', block:'start'});
+  });
   newBlockToggle.addEventListener('click', ()=>{
     const showing = newBlockForm.style.display === 'block';
     newBlockForm.style.display = showing ? 'none' : 'block';
