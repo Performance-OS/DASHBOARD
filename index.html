@@ -68,10 +68,11 @@
   .wrap{position:relative;z-index:1;max-width:960px;margin:0 auto;padding:28px 20px 80px;}
 
   .hero{position:relative;border-radius:24px;overflow:hidden;margin-bottom:22px;}
-  header{position:relative;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:18px;
+  header{position:relative;
     padding:28px 30px;background:rgba(23,23,23,0.40);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
     border:1px solid rgba(255,255,255,0.10);border-radius:24px;
     box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);}
+  .hero-top-row{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:18px;}
   header h1{font-size:30px;margin:0 0 8px;color:#fff;font-weight:200;}
   header p{margin:0;color:var(--text-dim);font-size:11px;letter-spacing:0.16em;text-transform:uppercase;font-weight:400;}
   .countdown{background:transparent;padding:0;text-align:center;position:relative;width:116px;height:116px;display:flex;align-items:center;justify-content:center;}
@@ -245,7 +246,8 @@
 
   @media (max-width: 480px){
     .wrap{padding:18px 13px 64px;}
-    header{padding:20px;flex-direction:column;align-items:center;text-align:center;}
+    header{padding:20px;}
+    .hero-top-row{flex-direction:column;align-items:center;text-align:center;}
     header h1{font-size:23px;}
     .countdown{width:100px;height:100px;}
     .countdown .num{font-size:25px;}
@@ -276,27 +278,39 @@
   <div class="hero">
   <header>
     <button id="settingsGearBtn" class="settings-gear-btn" title="Settings">&#9881;</button>
-    <div>
-      <h1 class="display">Send It</h1>
-      <p id="subhead">Strava</p>
-    </div>
-    <div class="countdown-wrap">
-      <div class="countdown">
-        <svg viewBox="0 0 112 112">
-          <circle cx="56" cy="56" r="50" fill="none" stroke="var(--line)" stroke-width="1.5"/>
-          <circle id="countdownRing" cx="56" cy="56" r="50" fill="none" stroke="var(--brass)" stroke-width="1.5"
-            stroke-linecap="round" stroke-dasharray="314.159" stroke-dashoffset="314.159"
-            transform="rotate(-90 56 56)"/>
-          <g stroke="var(--text-dim)" stroke-width="1" opacity="0.5">
-            <line x1="56" y1="4" x2="56" y2="10"/>
-            <line x1="108" y1="56" x2="102" y2="56"/>
-            <line x1="56" y1="108" x2="56" y2="102"/>
-            <line x1="4" y1="56" x2="10" y2="56"/>
-          </g>
-        </svg>
-        <div class="num mono" id="countdownNum">--</div>
+    <div class="hero-top-row">
+      <div>
+        <h1 class="display">Send It</h1>
+        <p id="subhead">Strava</p>
       </div>
-      <div class="lbl" id="countdownLbl">DAYS TO RACE</div>
+      <div class="countdown-wrap">
+        <div class="countdown">
+          <svg viewBox="0 0 112 112">
+            <circle cx="56" cy="56" r="50" fill="none" stroke="var(--line)" stroke-width="1.5"/>
+            <circle id="countdownRing" cx="56" cy="56" r="50" fill="none" stroke="var(--brass)" stroke-width="1.5"
+              stroke-linecap="round" stroke-dasharray="314.159" stroke-dashoffset="314.159"
+              transform="rotate(-90 56 56)"/>
+            <g stroke="var(--text-dim)" stroke-width="1" opacity="0.5">
+              <line x1="56" y1="4" x2="56" y2="10"/>
+              <line x1="108" y1="56" x2="102" y2="56"/>
+              <line x1="56" y1="108" x2="56" y2="102"/>
+              <line x1="4" y1="56" x2="10" y2="56"/>
+            </g>
+          </svg>
+          <div class="num mono" id="countdownNum">--</div>
+        </div>
+        <div class="lbl" id="countdownLbl">DAYS TO RACE</div>
+      </div>
+    </div>
+    <div id="dailyMotivationCard" style="margin-top:20px;padding-top:20px;border-top:1px solid var(--line);">
+      <div id="dailyQuoteBlock" style="display:none;text-align:center;">
+        <p id="dailyQuoteText" style="font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;font-size:19px;color:#fff;margin:0;line-height:1.5;">&ldquo;&rdquo;</p>
+        <p id="dailyQuoteAuthor" style="font-size:10px;color:var(--text-dim);letter-spacing:0.14em;text-transform:uppercase;margin:12px 0 0;"></p>
+      </div>
+      <div id="dailyFactBlock" style="display:none;text-align:left;">
+        <span style="font-size:9px;color:var(--accent);letter-spacing:0.14em;text-transform:uppercase;font-weight:600;">Today I Learned</span>
+        <p id="dailyFactText" style="font-size:13px;color:var(--text-dim);line-height:1.6;margin:8px 0 0;"></p>
+      </div>
     </div>
   </header>
   </div>
@@ -310,17 +324,6 @@
 
   <!-- HOME VIEW -->
   <div class="view active" id="view-home">
-    <div class="card" id="dailyMotivationCard" style="padding:22px 24px;">
-      <div id="dailyQuoteBlock" style="display:none;text-align:center;">
-        <p id="dailyQuoteText" style="font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;font-size:19px;color:#fff;margin:0;line-height:1.5;">&ldquo;&rdquo;</p>
-        <p id="dailyQuoteAuthor" style="font-size:10px;color:var(--text-dim);letter-spacing:0.14em;text-transform:uppercase;margin:12px 0 0;"></p>
-      </div>
-      <div id="dailyFactBlock" style="display:none;text-align:left;">
-        <span style="font-size:9px;color:var(--accent);letter-spacing:0.14em;text-transform:uppercase;font-weight:600;">Today I Learned</span>
-        <p id="dailyFactText" style="font-size:13px;color:var(--text-dim);line-height:1.6;margin:8px 0 0;"></p>
-      </div>
-    </div>
-
     <div class="card" style="padding:16px 20px;">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
         <div>
@@ -1314,11 +1317,26 @@ function getContextMessage(){
 // A real, honest reflection from actual training history - not curated content, so there's
 // nothing to get wrong or misattribute. Handles the empty-Strava-history case gracefully
 // rather than showing a confusing zero.
+// A lifetime cumulative total barely changes day to day and stops meaning much once it's
+// large - not genuinely useful to see the same-ish number every morning. This compares two
+// fully-completed weeks against each other instead, which actually changes weekly and gives
+// real signal on trajectory. Deliberately never compares against the CURRENT in-progress
+// week - that would unfairly show "behind" every Monday/Tuesday even when on the same pace,
+// since only part of this week has happened yet.
 function getMomentumText(){
-  const totalKm = weeklyData.weekly.reduce((s,w)=>s+w.km, 0);
-  const activeWeeks = weeklyData.weekly.filter(w=>w.km>0).length;
-  if(totalKm === 0) return "Connect Strava and log some runs to start tracking your progress here.";
-  return `You've logged ${Math.round(totalKm)}km across ${activeWeeks} week${activeWeeks===1?'':'s'} of training so far.`;
+  if(weeklyData.weekly.length === 0) return "Connect Strava and log some runs to start tracking your progress here.";
+  const currentMonday = getWeekDates()[0];
+  const completedWeeks = weeklyData.weekly.filter(w => w.week < currentMonday).sort((a,b)=> a.week.localeCompare(b.week));
+  if(completedWeeks.length < 2){
+    const totalKm = weeklyData.weekly.reduce((s,w)=>s+w.km, 0);
+    return totalKm > 0 ? `You've logged ${Math.round(totalKm)}km so far \u2014 keep building.` : "Log a few runs to start seeing your week-to-week trend here.";
+  }
+  const lastWeek = completedWeeks[completedWeeks.length-1];
+  const weekBefore = completedWeeks[completedWeeks.length-2];
+  const diff = lastWeek.km - weekBefore.km;
+  if(Math.abs(diff) < 0.5) return `Last week you held steady at ${lastWeek.km.toFixed(1)}km, right in line with the week before.`;
+  if(diff > 0) return `Last week you ran ${diff.toFixed(1)}km more than the week before \u2014 ${lastWeek.km.toFixed(1)}km total.`;
+  return `Last week was ${Math.abs(diff).toFixed(1)}km lighter than the week before \u2014 ${lastWeek.km.toFixed(1)}km total.`;
 }
 // Populates the quote/fact/momentum card - called once marathonPlanGlobal and weeklyData
 // have both actually loaded (alongside renderHome(), not at the top of the init sequence),
