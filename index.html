@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Splits</title>
+<title>Send It</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700&family=IBM+Plex+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -171,6 +171,8 @@
   .feel-btn{background:rgba(255,255,255,0.05);border:1px solid var(--line);color:var(--text-dim);font-size:9px;padding:3px 9px;border-radius:20px;cursor:pointer;font-family:'Inter',sans-serif;letter-spacing:0.06em;transition:all .15s ease;}
   .cta-btn{padding:16px 28px;font-size:15px;font-weight:700;border-radius:14px;background:var(--accent);border:1px solid var(--accent);color:#fff;cursor:pointer;font-family:'Inter',sans-serif;letter-spacing:0.02em;box-shadow:0 8px 24px rgba(224,122,74,0.35);transition:all .18s ease;}
   .cta-btn:hover{background:var(--accent-soft);box-shadow:0 10px 28px rgba(224,122,74,0.45);transform:translateY(-1px);}
+  .settings-gear-btn{position:absolute;top:14px;right:14px;width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.05);border:1px solid var(--line);color:var(--text-dim);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s ease;z-index:2;}
+  .settings-gear-btn:hover{background:rgba(255,255,255,0.1);color:var(--text);}
   .strava-btn{padding:18px 32px;font-size:16px;font-weight:700;border-radius:14px;background:#FC4C02;border:1px solid #FC4C02;color:#fff;cursor:pointer;font-family:'Inter',sans-serif;letter-spacing:0.02em;box-shadow:0 8px 26px rgba(252,76,2,0.4);transition:all .18s ease;}
   .strava-btn:hover{background:#E44502;box-shadow:0 10px 30px rgba(252,76,2,0.5);transform:translateY(-1px);}
   .day-toggle{position:relative;cursor:pointer;}
@@ -260,7 +262,7 @@
 <body>
 <div id="passcodeGate" style="display:none;position:fixed;inset:0;z-index:10000;background:#0D0F12;align-items:center;justify-content:center;padding:20px;">
   <div style="max-width:340px;width:100%;background:rgba(23,23,23,0.6);backdrop-filter:blur(24px);border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:28px;text-align:center;">
-    <h1 style="font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;font-size:28px;margin:0 0 8px;color:#fff;">Splits</h1>
+    <h1 style="font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;font-size:28px;margin:0 0 8px;color:#fff;">Send It</h1>
     <p style="color:#A3A3A3;font-size:12px;margin:0 0 20px;line-height:1.5;">Enter a passcode to sync your training data across devices. Use the exact same one on every device you want synced together.</p>
     <input type="password" id="passcodeInput" placeholder="Your passcode" autocomplete="off"
       style="width:100%;box-sizing:border-box;padding:12px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:#fff;font-family:'IBM Plex Mono',monospace;font-size:14px;margin-bottom:12px;">
@@ -273,8 +275,9 @@
 
   <div class="hero">
   <header>
+    <button id="settingsGearBtn" class="settings-gear-btn" title="Settings">&#9881;</button>
     <div>
-      <h1 class="display">Splits</h1>
+      <h1 class="display">Send It</h1>
       <p id="subhead">Strava</p>
     </div>
     <div class="countdown-wrap">
@@ -307,6 +310,31 @@
 
   <!-- HOME VIEW -->
   <div class="view active" id="view-home">
+    <div class="card" style="text-align:center;padding:22px 24px;">
+      <p id="dailyQuoteText" style="font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;font-size:19px;color:#fff;margin:0;line-height:1.5;">&ldquo;&rdquo;</p>
+      <p id="dailyQuoteAuthor" style="font-size:10px;color:var(--text-dim);letter-spacing:0.14em;text-transform:uppercase;margin:12px 0 0;"></p>
+    </div>
+
+    <div class="card" style="padding:16px 20px;">
+      <div style="display:flex;align-items:baseline;gap:8px;">
+        <span style="font-size:9px;color:var(--accent);letter-spacing:0.14em;text-transform:uppercase;flex-shrink:0;font-weight:600;">Today I Learned</span>
+      </div>
+      <p id="dailyFactText" style="font-size:12px;color:var(--text-dim);line-height:1.6;margin:8px 0 0;"></p>
+    </div>
+
+    <div class="card" style="padding:16px 20px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+        <div>
+          <span style="font-size:9px;color:var(--accent);letter-spacing:0.14em;text-transform:uppercase;font-weight:600;">Momentum</span>
+          <p id="momentumText" style="font-size:12px;color:var(--text-dim);line-height:1.5;margin:8px 0 0;"></p>
+        </div>
+        <div style="text-align:center;flex-shrink:0;">
+          <div id="streakFlameNum" style="font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:600;color:#fff;">0</div>
+          <div style="font-size:8px;color:var(--text-dim);letter-spacing:0.1em;text-transform:uppercase;white-space:nowrap;">&#128293; day streak</div>
+        </div>
+      </div>
+    </div>
+
     <div class="refresh-bar">
       <span class="dot" id="statusDot"></span>
       <span id="statusText">Loading latest Strava data&hellip;</span>
@@ -379,7 +407,7 @@
     </div>
 
     <div class="card" id="raceSetupCard" style="display:none;">
-      <h2>Race Setup <button id="resetMarathonPlanBtn" class="feel-btn" style="float:right;color:var(--rust);">Reset Plan</button></h2>
+      <h2>Race Setup <button id="resetMarathonPlanBtn" class="feel-btn" style="float:right;color:var(--rust);">Reset This Plan</button></h2>
       <div class="field-row">
         <div class="field">
           <label>Race date</label>
@@ -393,6 +421,7 @@
       <div class="zone-grid" id="zoneGrid"></div>
       <p class="note">Easy = conversational, most of your weekly volume. Long run = slightly easier than goal pace, for endurance. Tempo = comfortably hard, sustained effort. Interval = short, fast reps for speed &amp; VO2max.</p>
       <p class="note">HR ranges are calibrated from your actual recent runs, not the generic Strava zone chart. "Now" reflects what's realistic today; "Goal" is what to work toward as fitness builds. Lead with pace/conversational effort; only back off if HR runs far outside the "Now" range.</p>
+      <p class="note">"Reset This Plan" wipes any edits and session completions but keeps the same goal, race date, and time &mdash; use it if you've messed something up and want a clean slate for what you're already training for. To switch to a different goal or race entirely, use "Start New Training Block" below instead.</p>
     </div>
 
     <div class="card">
@@ -570,6 +599,33 @@
           </div>
           <p class="note" style="margin-top:6px;">Leave unchecked if none apply. Anything checked here swaps out exercises that tend to aggravate that area for gentler alternatives that train the same muscles.</p>
         </div>
+        <div class="field" style="margin-top:14px;">
+          <label>Which day for each session?</label>
+          <div class="field-row" style="margin-top:8px;">
+            <div class="field">
+              <label>Upper</label>
+              <select id="strengthUpperDay">
+                <option value="Mon">Monday</option><option value="Tue">Tuesday</option><option value="Wed">Wednesday</option>
+                <option value="Thu">Thursday</option><option value="Fri">Friday</option><option value="Sat">Saturday</option><option value="Sun">Sunday</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Lower</label>
+              <select id="strengthLowerDay">
+                <option value="Mon">Monday</option><option value="Tue">Tuesday</option><option value="Wed">Wednesday</option>
+                <option value="Thu">Thursday</option><option value="Fri">Friday</option><option value="Sat">Saturday</option><option value="Sun">Sunday</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Core</label>
+              <select id="strengthCoreDay">
+                <option value="Mon">Monday</option><option value="Tue">Tuesday</option><option value="Wed">Wednesday</option>
+                <option value="Thu">Thursday</option><option value="Fri">Friday</option><option value="Sat">Saturday</option><option value="Sun">Sunday</option>
+              </select>
+            </div>
+          </div>
+          <p class="note" style="margin-top:6px;">These are suggested days only, shown on Home and the week view &mdash; logging a session never depends on which day it actually happens. Pick three different days.</p>
+        </div>
         <button class="feel-btn" id="confirmStrengthSetupBtn" style="color:var(--track);margin-top:14px;">Generate My Program</button>
       </div>
     </div>
@@ -701,7 +757,11 @@
         <button class="feel-btn" id="resetHabitItemsBtn" style="margin-top:6px;">Reset to defaults</button>
       </div>
     </div>
+  </div>
 
+  <!-- SETTINGS VIEW - reached via the header gear icon, not a nav tab, since Sync/Backup
+       are low-frequency utility actions rather than something checked daily like the other four. -->
+  <div class="view" id="view-settings">
     <div class="card">
       <h2>Sync</h2>
       <p class="note" style="margin-top:0;">This device is synced under a passcode &mdash; enter the exact same one on any other device to see the same data there, automatically.</p>
@@ -967,7 +1027,12 @@ function generateFullPlan(goalType, raceDateStr, profile){
   if(totalWeeks < 1) return generateBlankPlanWeeks(raceDateStr); // race date already passed / this week - nothing sensible to generate
 
   const structuredWeeks = Math.min(totalWeeks, tmpl.idealWeeks);
-  const baseWeeks = Math.max(0, totalWeeks - structuredWeeks);
+  // Cap how much pure base-building gets generated before the structured phase starts - a
+  // race date years out shouldn't produce a 150+ week array. Anything beyond ~9-10 months of
+  // base phase is capped; the structured phase still gets anchored correctly to the real race
+  // date regardless (see below), so race day placement is never affected by this cap.
+  const MAX_BASE_WEEKS = 40;
+  const baseWeeks = Math.min(Math.max(0, totalWeeks - structuredWeeks), MAX_BASE_WEEKS);
 
   const recentKms = weeklyData.weekly.slice(-6).map(w=>w.km).filter(k=>k>0);
   const recentAvg = recentKms.length ? recentKms.reduce((a,b)=>a+b,0)/recentKms.length : null;
@@ -984,6 +1049,11 @@ function generateFullPlan(goalType, raceDateStr, profile){
     weeks.push(buildBaseWeek(monday, Math.max(startKm, km), availableDays, preferredLongDay));
     monday = addDays(monday, 7);
   }
+
+  // The structured phase is always anchored directly from the race date backward, not by
+  // continuing wherever the (possibly-capped) base phase left off - so if base weeks got
+  // capped above, there's an intentional gap in the middle rather than a wrong race date.
+  monday = addDays(raceMonday, -7*(structuredWeeks-1));
 
   const buildWeeks = Math.max(1, structuredWeeks - tmpl.taperWeeks);
   let qualityIdx = 0;
@@ -1088,6 +1158,186 @@ async function loadSessionCompletion(){ try{ const r = await storageGetSafe('ses
 async function saveSessionCompletion(p){ await storageSetSafe('session_completion', JSON.stringify(p)); }
 
 function toLocalISO(d){ const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}`; }
+
+// Curated, not pulled from a live API - genuine, verifiable quotes from primary Stoic texts
+// (Meditations, Seneca's Letters, Epictetus's Discourses/Enchiridion), all public domain.
+// Deterministic by day of year, so it's the same quote for everyone on a given day rather
+// than random - and it'll always work, no dependency on a third-party quotes service.
+const DAILY_QUOTES = [
+  { text:"You have power over your mind \u2014 not outside events. Realize this, and you will find strength.", author:"Marcus Aurelius" },
+  { text:"The impediment to action advances action. What stands in the way becomes the way.", author:"Marcus Aurelius" },
+  { text:"Waste no more time arguing about what a good man should be. Be one.", author:"Marcus Aurelius" },
+  { text:"If it is not right, do not do it; if it is not true, do not say it.", author:"Marcus Aurelius" },
+  { text:"Very little is needed to make a happy life; it is all within yourself, in your way of thinking.", author:"Marcus Aurelius" },
+  { text:"Confine yourself to the present.", author:"Marcus Aurelius" },
+  { text:"He who lives in harmony with himself lives in harmony with the universe.", author:"Marcus Aurelius" },
+  { text:"How much more grievous are the consequences of anger than the causes of it.", author:"Marcus Aurelius" },
+  { text:"The best revenge is to be unlike him who performed the injury.", author:"Marcus Aurelius" },
+  { text:"Accept the things to which fate binds you, and love the people with whom fate brings you together.", author:"Marcus Aurelius" },
+  { text:"We suffer more often in imagination than in reality.", author:"Seneca" },
+  { text:"Difficulties strengthen the mind, as labor does the body.", author:"Seneca" },
+  { text:"Luck is what happens when preparation meets opportunity.", author:"Seneca" },
+  { text:"It is not that we have a short time to live, but that we waste a lot of it.", author:"Seneca" },
+  { text:"He who is brave is free.", author:"Seneca" },
+  { text:"Every new beginning comes from some other beginning's end.", author:"Seneca" },
+  { text:"As is a tale, so is life: not how long it is, but how good it is, is what matters.", author:"Seneca" },
+  { text:"While we wait for life, life passes.", author:"Seneca" },
+  { text:"It's not what happens to you, but how you react to it that matters.", author:"Epictetus" },
+  { text:"No man is free who is not master of himself.", author:"Epictetus" },
+  { text:"First say to yourself what you would be; and then do what you have to do.", author:"Epictetus" },
+  { text:"We cannot choose our external circumstances, but we can always choose how we respond to them.", author:"Epictetus" },
+  { text:"Man is not worried by real problems so much as by his imagined anxieties about real problems.", author:"Epictetus" },
+  { text:"Only the educated are free.", author:"Epictetus" },
+  { text:"Circumstances don't make the man, they only reveal him to himself.", author:"Epictetus" },
+  { text:"He is a wise man who does not grieve for the things which he has not, but rejoices for those which he has.", author:"Epictetus" },
+  { text:"The happiness of your life depends upon the quality of your thoughts.", author:"Marcus Aurelius" },
+  { text:"Everything we hear is an opinion, not a fact. Everything we see is a perspective, not the truth.", author:"Marcus Aurelius" },
+  { text:"Loss is nothing else but change, and change is Nature's delight.", author:"Marcus Aurelius" },
+  { text:"Dwell on the beauty of life. Watch the stars, and see yourself running with them.", author:"Marcus Aurelius" },
+  { text:"The universe is change; our life is what our thoughts make it.", author:"Marcus Aurelius" },
+  { text:"Never let the future disturb you. You will meet it, if you have to, with the same weapons of reason which today arm you against the present.", author:"Marcus Aurelius" },
+  { text:"Do every act of your life as if it were your last.", author:"Marcus Aurelius" },
+  { text:"When you arise in the morning, think of what a precious privilege it is to be alive.", author:"Marcus Aurelius" },
+  { text:"It is not the man who has too little, but the man who craves more, that is poor.", author:"Seneca" },
+  { text:"A gem cannot be polished without friction, nor a man perfected without trials.", author:"Seneca" },
+  { text:"Sometimes even to live is an act of courage.", author:"Seneca" },
+  { text:"If a man knows not to which port he sails, no wind is favorable.", author:"Seneca" },
+  { text:"Begin at once to live, and count each separate day as a separate life.", author:"Seneca" },
+  { text:"Nothing, to my mind, is a better proof of a well-ordered mind than a man's ability to stop just where he is and pass some time in his own company.", author:"Seneca" },
+  { text:"Wealth consists not in having great possessions, but in having few wants.", author:"Epictetus" },
+  { text:"He who has learned to obey will know how to command.", author:"Epictetus" },
+  { text:"Make the best use of what is in your power, and take the rest as it happens.", author:"Epictetus" },
+  { text:"It is impossible for a man to learn what he thinks he already knows.", author:"Epictetus" },
+  { text:"Don't explain your philosophy. Embody it.", author:"Epictetus" },
+  { text:"Whatever you are, be a good one.", author:"Abraham Lincoln" },
+  { text:"I am a slow walker, but I never walk back.", author:"Abraham Lincoln" },
+  { text:"Always bear in mind that your own resolution to succeed is more important than any other one thing.", author:"Abraham Lincoln" },
+  { text:"Character is like a tree and reputation like its shadow. The shadow is what we think of it; the tree is the real thing.", author:"Abraham Lincoln" },
+  { text:"It is hard to fail, but it is worse never to have tried to succeed.", author:"Theodore Roosevelt" },
+  { text:"Do what you can, with what you have, where you are.", author:"Theodore Roosevelt" },
+  { text:"Far and away the best prize that life offers is the chance to work hard at work worth doing.", author:"Theodore Roosevelt" },
+  { text:"Nothing in the world is worth having or worth doing unless it means effort, pain, difficulty.", author:"Theodore Roosevelt" },
+  { text:"What lies behind us and what lies before us are tiny matters compared to what lies within us.", author:"Ralph Waldo Emerson" },
+  { text:"Do not go where the path may lead, go instead where there is no path and leave a trail.", author:"Ralph Waldo Emerson" },
+  { text:"The only person you are destined to become is the person you decide to be.", author:"Ralph Waldo Emerson" },
+  { text:"Nothing great was ever achieved without enthusiasm.", author:"Ralph Waldo Emerson" },
+  { text:"For every minute you remain angry, you give up sixty seconds of peace of mind.", author:"Ralph Waldo Emerson" },
+  { text:"Go confidently in the direction of your dreams. Live the life you have imagined.", author:"Henry David Thoreau" },
+  { text:"It's not what you look at that matters, it's what you see.", author:"Henry David Thoreau" },
+  { text:"Things do not change; we change.", author:"Henry David Thoreau" },
+  { text:"You must live in the present, launch yourself on every wave, find your eternity in each moment.", author:"Henry David Thoreau" },
+];
+function getDailyQuote(){
+  const now = new Date();
+  const startOfYear = new Date(now.getFullYear(), 0, 0);
+  const dayOfYear = Math.floor((now - startOfYear) / 86400000);
+  return DAILY_QUOTES[dayOfYear % DAILY_QUOTES.length];
+}
+// Genuine sports-science/training facts, not the popular myths that circulate (lactic acid
+// causing soreness, static stretching preventing injury, etc.) - deliberately corrected a few
+// of those directly below. Same rotation mechanism as the quotes: deterministic by day of
+// year, no external dependency, no accuracy risk from misattribution since these aren't
+// quotes tied to a person.
+const TRAINING_FACTS = [
+  "Muscle soreness after a hard workout (DOMS) isn't caused by lactic acid buildup, despite the popular myth \u2014 it's mainly linked to microscopic damage from eccentric (lengthening) muscle contractions.",
+  "Most strength gains in your first few months of resistance training come from your nervous system getting better at recruiting muscle fibers, not from the fibers actually growing yet.",
+  "The body doesn't get fitter during a workout \u2014 it gets fitter during the recovery afterward, which is why rest days are a genuine part of training, not time off from it.",
+  "Static stretching held before a workout can temporarily reduce power output \u2014 part of why a dynamic, moving warm-up is generally preferred right before hard efforts.",
+  "The 'wall' many marathoners hit around mile 20 is largely tied to glycogen depletion \u2014 the body shifting toward relying more on fat for fuel, which burns less efficiently for the same effort.",
+  "Deload weeks aren't about laziness \u2014 controlled recovery is often what lets the adaptation from recent training actually catch up and get absorbed.",
+  "A noticeably elevated resting heart rate versus your normal baseline is one of the simplest, most reliable early signs of accumulated fatigue or illness.",
+  "Cross-training like swimming or cycling can maintain a meaningful chunk of cardiovascular fitness while reducing the repetitive impact stress running puts on joints and connective tissue.",
+  "Carbohydrate loading before a long race works by maximizing glycogen stores in the muscles and liver \u2014 but it only meaningfully helps for efforts lasting roughly 90 minutes or longer.",
+  "Training load management \u2014 how much volume you do and how fast you ramp it up \u2014 is a stronger predictor of injury risk in the research than shoe cushioning or shoe type.",
+  "Delayed onset muscle soreness typically peaks 24-72 hours after a workout, not immediately after \u2014 why a hard session can sometimes feel worse two days later than the day after.",
+  "Tapering before a race \u2014 cutting volume while keeping some intensity \u2014 can improve performance by several percent, mainly by letting fatigue clear while fitness is largely retained.",
+  "Bone density responds to loaded, weight-bearing exercise \u2014 part of why strength training alongside running offers benefits pure cardio training doesn't provide on its own.",
+  "Caffeine taken 30-60 minutes before exercise is one of the most well-researched performance aids for endurance exercise, with effects showing up at fairly modest doses.",
+  "Lactate threshold \u2014 the effort level where lactate starts accumulating faster than your body can clear it \u2014 is one of the strongest predictors of sustainable race pace for events over 30 minutes.",
+  "Running economy, how efficiently your body uses oxygen at a given pace, often improves more from consistent easy-paced volume than from speed work alone.",
+  "Muscle protein synthesis stays elevated for roughly 24-48 hours after a resistance session \u2014 part of why full-body or alternating splits across a week can work well.",
+  "Sleep is when most of the growth hormone release linked to muscle repair happens \u2014 consistently cutting sleep short can blunt recovery even with well-programmed training.",
+  "Fluid loss of just 2% of body weight through sweat can measurably reduce endurance performance.",
+  "Grip strength is one of the simplest, most reliable markers researchers use as a general proxy for overall strength and health in longevity studies.",
+  "The commonly cited '10% rule' for weekly mileage increases is a rough guideline, not a hard law \u2014 but it's a reasonable ceiling for reducing overuse injury risk.",
+  "Interval training near VO2 max pace is one of the most time-efficient ways to raise your body's ceiling for oxygen use, even in short sessions.",
+  "Your heart can pump roughly four times more blood per minute during hard exercise than at rest.",
+];
+function getDailyFact(){
+  const now = new Date();
+  const startOfYear = new Date(now.getFullYear(), 0, 0);
+  const dayOfYear = Math.floor((now - startOfYear) / 86400000);
+  return TRAINING_FACTS[dayOfYear % TRAINING_FACTS.length];
+}
+// Small curated pools for the days where a distinct tone genuinely adds something - not every
+// session type gets one (Easy/Tempo/Interval days just use the normal quote rotation), only
+// the handful where "today" is meaningfully different in character. Deterministic by day of
+// year within its own pool, same mechanism as the quotes/facts.
+const CONTEXT_MESSAGES = {
+  Race: [
+    "This is the day the training was for. Trust it.",
+    "Every session that felt hard was preparing you for exactly this one.",
+    "You don't need to find anything new today \u2014 just do what you already know how to do.",
+  ],
+  Long: [
+    "Long runs aren't about today's pace \u2014 they're deposits into race-day endurance.",
+    "Patience is the whole point of this one. Let it be slow.",
+    "This is the session that builds what a fast finish needs later.",
+  ],
+  Rest: [
+    "Rest is not the opposite of training \u2014 it's part of it.",
+    "The adaptation from your last hard session happens today, not during it.",
+    "Recovery done well is still progress, even when it doesn't feel like it.",
+  ],
+};
+// Reads today's planned session the same way Home's "Today's Plan" card does, so this can
+// never disagree with what's already shown there. Returns null if there's no plan set up yet.
+function getTodaySessionType(){
+  try{
+    const todayStr = toLocalISO(new Date());
+    const weekDates = getWeekDates();
+    const mondayStr = weekDates[0];
+    const planWeek = marathonPlanGlobal.find(w=>w.monday===mondayStr);
+    if(!planWeek) return null;
+    const dayKey = DAY_KEYS[weekDates.indexOf(todayStr)];
+    const session = planWeek.days[dayKey];
+    return session ? session.type : 'Rest';
+  }catch(e){ return null; }
+}
+function getContextMessage(){
+  const sessionType = getTodaySessionType();
+  if(!sessionType || !CONTEXT_MESSAGES[sessionType]) return null;
+  const pool = CONTEXT_MESSAGES[sessionType];
+  const now = new Date();
+  const dayOfYear = Math.floor((now - new Date(now.getFullYear(),0,0)) / 86400000);
+  return pool[dayOfYear % pool.length];
+}
+// A real, honest reflection from actual training history - not curated content, so there's
+// nothing to get wrong or misattribute. Handles the empty-Strava-history case gracefully
+// rather than showing a confusing zero.
+function getMomentumText(){
+  const totalKm = weeklyData.weekly.reduce((s,w)=>s+w.km, 0);
+  const activeWeeks = weeklyData.weekly.filter(w=>w.km>0).length;
+  if(totalKm === 0) return "Connect Strava and log some runs to start tracking your progress here.";
+  return `You've logged ${Math.round(totalKm)}km across ${activeWeeks} week${activeWeeks===1?'':'s'} of training so far.`;
+}
+// Populates the quote/fact/momentum card - called once marathonPlanGlobal and weeklyData
+// have both actually loaded (alongside renderHome(), not at the top of the init sequence),
+// since context-awareness and the momentum reflection both depend on that real data.
+function renderDailyMotivation(){
+  const ctx = getContextMessage();
+  if(ctx){
+    document.getElementById('dailyQuoteText').textContent = `\u201c${ctx}\u201d`;
+    document.getElementById('dailyQuoteAuthor').textContent = "Today\u2019s focus";
+  } else {
+    const q = getDailyQuote();
+    document.getElementById('dailyQuoteText').textContent = `\u201c${q.text}\u201d`;
+    document.getElementById('dailyQuoteAuthor').textContent = q.author;
+  }
+  document.getElementById('dailyFactText').textContent = getDailyFact();
+  document.getElementById('momentumText').textContent = getMomentumText();
+  document.getElementById('streakFlameNum').textContent = computeHabitStreak();
+}
 function fmtDate(iso){ const d=new Date(iso+'T00:00:00'); return d.toLocaleDateString('en-GB',{day:'numeric',month:'short'}); }
 function fmtTime(s){ const h=Math.floor(s/3600), m=Math.floor((s%3600)/60); return h>0?`${h}h ${m}m`:`${m}m`; }
 function isoWeekMonday(dateStr){
@@ -1144,7 +1394,8 @@ const FEEL_COLORS = { Easy:'#6EA88C', Right:'#E07A4A', Hard:'#C9633F' };
 function computeDerived(){
   const last4 = weeklyData.weekly.slice(-4);
   const avg4wk = last4.length ? last4.reduce((a,w)=>a+w.km,0)/last4.length : 0;
-  const thisWeek = weeklyData.weekly[weeklyData.weekly.length-1] || {km:0};
+  const currentMonday = getWeekDates()[0];
+  const thisWeek = weeklyData.weekly.find(w=>w.week===currentMonday) || {km:0};
   const peakWeek = weeklyData.weekly.length ? weeklyData.weekly.reduce((a,w)=>w.km>a.km?w:a, weeklyData.weekly[0]) : {km:0};
   return {avg4wk, thisWeek, peakWeek};
 }
@@ -1247,14 +1498,18 @@ function initStatusBar(){
   });
 }
 
+function showView(viewName){
+  document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  const navBtn = document.querySelector(`nav button[data-view="${viewName}"]`);
+  if(navBtn) navBtn.classList.add('active'); // Settings has no matching nav button, so none highlights - correct, it's not one of the four primary tabs
+  const view = document.getElementById('view-'+viewName);
+  if(view) view.classList.add('active');
+}
 document.querySelectorAll('nav button').forEach(btn=>{
-  btn.addEventListener('click', ()=>{
-    document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
-    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('view-'+btn.dataset.view).classList.add('active');
-  });
+  btn.addEventListener('click', ()=> showView(btn.dataset.view));
 });
+document.getElementById('settingsGearBtn').addEventListener('click', ()=> showView('settings'));
 
 let storageWarningTimeout = null;
 let __storageQueue = Promise.resolve();
@@ -1527,7 +1782,7 @@ async function saveCustomExercises(p){ await storageSetSafe('custom_exercises', 
 
 const ALL_BACKUP_KEYS = [
   'marathon_plan_v2','session_completion','strength_session_completion','strength_log','strength_goals',
-  'custom_exercises','race_date','goal_time','goal_type','plan_archive_v1','plan_profile','strength_profile',
+  'custom_exercises','race_date','goal_time','goal_type','plan_archive_v1','plan_profile','strength_profile','strength_schedule',
   'habit_log','custom_habit_items','pain_log'
 ];
 
@@ -1808,6 +2063,27 @@ function generateStrengthProgram(profile){
   };
 }
 
+// Checks a proposed strength schedule against the person's actual running plan: for each
+// chosen strength day, scans every week of the plan for a hard running session (Long, Tempo,
+// or Interval) landing on that same day-of-week. Returns one entry per day that has any
+// overlap, with a count of how many weeks it happens in - not a hard rule, just a real signal
+// worth surfacing before someone unknowingly stacks heavy legs onto their hardest run days.
+function checkStrengthScheduleConflicts(schedule){
+  if(!marathonPlanGlobal || !marathonPlanGlobal.length) return [];
+  const HARD_TYPES = ['Long','Tempo','Interval'];
+  const conflicts = [];
+  Object.keys(schedule).forEach(dayKey=>{
+    const sessionType = schedule[dayKey];
+    let hardCount = 0;
+    marathonPlanGlobal.forEach(week=>{
+      const runSession = week.days[dayKey];
+      if(runSession && HARD_TYPES.includes(runSession.type)) hardCount++;
+    });
+    if(hardCount > 0) conflicts.push({ dayKey, sessionType, hardCount, totalWeeks: marathonPlanGlobal.length });
+  });
+  return conflicts;
+}
+
 const DEFAULT_STRENGTH_EXERCISES = {
   Upper: [ {name:'Incline DB Bench Press', sets:3, reps:8, weighted:true}, {name:'Seated Cable Row', sets:3, reps:10, weighted:true}, {name:'Lat Pulldown', sets:3, reps:10, weighted:true}, {name:'Single-Arm DB Row', sets:3, reps:'10 each arm', weighted:true}, {name:'Seated DB Shoulder Press', sets:3, reps:10, weighted:true}, {name:'Bicep Curls', sets:2, reps:12, weighted:true}, {name:'Triceps Pushdown', sets:2, reps:12, weighted:true} ],
   Lower: [ {name:'Goblet Squat', sets:3, reps:10, weighted:true}, {name:'Reverse Lunge / Split Squat', sets:3, reps:'10 each leg', weighted:true}, {name:'Single-Leg Romanian Deadlift', sets:3, reps:'10 each leg', weighted:true}, {name:'Hip Thrust / Glute Bridge', sets:3, reps:12, weighted:true}, {name:'Single-Leg Calf Raise', sets:3, reps:'15 each leg', weighted:true}, {name:'Lateral Band Walks', sets:3, reps:'15 each way', weighted:false} ],
@@ -1836,10 +2112,13 @@ function estimate1RM(weight, reps){
 }
 
 const STRENGTH_SESSIONS = ['Upper','Lower','Core'];
-// Suggested days - Mon and Fri are open every week of the plan with no exceptions; Wed is
-// open through week 9 and becomes an Easy run day (never Tempo/Interval) from week 10 on,
-// so pairing Lower there never collides with a hard running session.
-const STRENGTH_SCHEDULE = { Mon:'Upper', Wed:'Lower', Fri:'Core' };
+// Default suggested days if nobody's customized it - Mon/Wed/Fri, the original schedule this
+// app was built around. strengthScheduleGlobal is what actually gets read everywhere; this
+// constant is just its starting point (and what "Reset to defaults" restores).
+const DEFAULT_STRENGTH_SCHEDULE = { Mon:'Upper', Wed:'Lower', Fri:'Core' };
+let strengthScheduleGlobal = JSON.parse(JSON.stringify(DEFAULT_STRENGTH_SCHEDULE));
+async function loadStrengthSchedule(){ try{ const r = await storageGetSafe('strength_schedule'); return r?JSON.parse(r.value):null; }catch(e){ return null; } }
+async function saveStrengthSchedule(sched){ await storageSetSafe('strength_schedule', JSON.stringify(sched)); }
 const SESSION_LOG_COLORS = { Upper:'#E07A4A', Lower:'#C9633F', Core:'#6EA88C' };
 
 let strengthSessionCompletion = {};
@@ -1881,7 +2160,7 @@ function initStrengthSessionLogger(){
     const dayIndexByName = {Mon:0,Tue:1,Wed:2,Thu:3,Fri:4,Sat:5,Sun:6};
 
     container.innerHTML = STRENGTH_SESSIONS.map(session=>{
-      const scheduledDay = Object.keys(STRENGTH_SCHEDULE).find(d=>STRENGTH_SCHEDULE[d]===session);
+      const scheduledDay = Object.keys(strengthScheduleGlobal).find(d=>strengthScheduleGlobal[d]===session);
       const dateStr = addDays(mondayStr, dayIndexByName[scheduledDay]);
       const isDone = isStrengthDone(dateStr, session);
       const color = SESSION_LOG_COLORS[session];
@@ -2118,9 +2397,12 @@ function initExerciseEditor(){
     toggleBtn.textContent = showing ? 'Edit' : 'Close';
   });
   document.getElementById('resetExercisesBtn').addEventListener('click', async ()=>{
-    if(!confirm('Reset all exercises back to the original defaults? This clears any custom exercises, sets, and reps you\u2019ve added.')) return;
+    if(!confirm('Reset all exercises and the suggested training days back to the original defaults? This clears any custom exercises, sets, and reps you\u2019ve added.')) return;
     activeExercises = JSON.parse(JSON.stringify(DEFAULT_STRENGTH_EXERCISES));
+    strengthScheduleGlobal = JSON.parse(JSON.stringify(DEFAULT_STRENGTH_SCHEDULE));
     try{ await storageDeleteSafe('custom_exercises'); }catch(e){ /* key may not exist yet - fine */ }
+    try{ await storageDeleteSafe('strength_schedule'); }catch(e){ /* key may not exist yet - fine */ }
+    try{ await storageDeleteSafe('strength_profile'); }catch(e){ /* key may not exist yet - fine */ }
     recomputeExercise1RMReps();
     renderExerciseEditor();
     if(window._replan) window._replan();
@@ -2133,26 +2415,60 @@ function initExerciseEditor(){
     const showing = setupForm.style.display === 'block';
     setupForm.style.display = showing ? 'none' : 'block';
     setupToggle.textContent = showing ? 'Set Up My Program' : 'Cancel';
+    if(!showing){
+      const currentUpperDay = Object.keys(strengthScheduleGlobal).find(d=>strengthScheduleGlobal[d]==='Upper') || 'Mon';
+      const currentLowerDay = Object.keys(strengthScheduleGlobal).find(d=>strengthScheduleGlobal[d]==='Lower') || 'Wed';
+      const currentCoreDay = Object.keys(strengthScheduleGlobal).find(d=>strengthScheduleGlobal[d]==='Core') || 'Fri';
+      document.getElementById('strengthUpperDay').value = currentUpperDay;
+      document.getElementById('strengthLowerDay').value = currentLowerDay;
+      document.getElementById('strengthCoreDay').value = currentCoreDay;
+    }
   });
   document.getElementById('confirmStrengthSetupBtn').addEventListener('click', async ()=>{
     const goal = document.getElementById('strengthGoal').value;
     const experienceLevel = document.getElementById('strengthExperience').value;
     const equipment = document.getElementById('strengthEquipment').value;
     const injuryFlags = Array.from(document.querySelectorAll('#strengthInjuries input:checked')).map(el=>el.value);
-    if(!confirm('This replaces your current exercise list with a generated program based on your answers. Weight history for each exercise stays saved under its name either way \u2014 if an exercise isn\u2019t in the new program, its history just won\u2019t show, it isn\u2019t deleted. Continue?')) return;
+    const upperDay = document.getElementById('strengthUpperDay').value;
+    const lowerDay = document.getElementById('strengthLowerDay').value;
+    const coreDay = document.getElementById('strengthCoreDay').value;
+    const chosenDays = [upperDay, lowerDay, coreDay];
+    if(new Set(chosenDays).size !== 3){
+      alert('Pick three different days \u2014 Upper, Lower, and Core each need their own day.');
+      return;
+    }
 
-    const profile = { goal, experienceLevel, equipment, injuryFlags };
-    activeExercises = generateStrengthProgram(profile);
-    recomputeExercise1RMReps();
-    await saveCustomExercises(activeExercises);
+    const newSchedule = { [upperDay]:'Upper', [lowerDay]:'Lower', [coreDay]:'Core' };
+
+    // Soft warning, not a rule: check the chosen days against the person's actual running
+    // plan for hard-session stacking before asking them to confirm anything.
+    const conflicts = checkStrengthScheduleConflicts(newSchedule);
+    if(conflicts.length > 0){
+      const lines = conflicts.map(c =>
+        `\u2022 ${c.sessionType} on ${c.dayKey}: a hard running session (Long, Tempo, or Interval) lands on the same day in ${c.hardCount} of your ${c.totalWeeks} plan weeks`
+      );
+      const proceedAnyway = confirm(
+        `Heads up \u2014 this schedule stacks strength on top of some hard running days:\n\n${lines.join('\n')}\n\n` +
+        `Not a hard rule, just a real signal \u2014 stacking a heavy session onto a hard run day adds real fatigue. Press OK to continue anyway, or Cancel to go back and try different days.`
+      );
+      if(!proceedAnyway) return;
+    }
+
+    if(!confirm('This replaces your current exercise list with a generated program based on your answers, and updates your suggested training days. Weight history for each exercise stays saved under its name either way \u2014 if an exercise isn\u2019t in the new program, its history just won\u2019t show, it isn\u2019t deleted. Continue?')) return;
+
+    const profile = { goal, experienceLevel, equipment, injuryFlags, upperDay, lowerDay, coreDay };
+    const newExercises = generateStrengthProgram(profile);
+
+    await saveCustomExercises(newExercises);
     await storageSetSafe('strength_profile', JSON.stringify(profile));
+    await saveStrengthSchedule(newSchedule);
 
-    setupForm.style.display = 'none';
-    setupToggle.textContent = 'Set Up My Program';
-    renderExerciseEditor();
-    if(window._replan) window._replan();
-    if(window._replanStrength) window._replanStrength();
-    showStorageWarning('New strength program generated.', false);
+    // A full reload rather than a partial re-render: the schedule feeds Home's stats, the
+    // week-plan tile, and the session logger, all independently - reloading guarantees every
+    // one of them picks up the new schedule consistently instead of hunting down each render
+    // path by hand and risking one getting missed.
+    alert('New strength program and schedule saved. The page will reload.');
+    location.reload();
   });
 
   renderExerciseEditor();
@@ -2247,6 +2563,8 @@ async function initPlan(){
     if(activeExercises[cat] && Array.isArray(customExercises[cat])) activeExercises[cat] = customExercises[cat];
   });
   recomputeExercise1RMReps();
+  const savedSchedule = await loadStrengthSchedule();
+  if(savedSchedule) strengthScheduleGlobal = savedSchedule;
   initExerciseEditor();
   strengthLogGlobal = await loadStrengthLog();
   strengthGoalsGlobal = await loadStrengthGoals();
@@ -2254,13 +2572,11 @@ async function initPlan(){
   initStrengthSessionLogger();
 
   const goalTypeRaw = await loadGoalType();
-  // goal_type alone isn't a reliable "is this truly brand new" signal: an established account
-  // (like the very first one this app was built around) can have been running on this file's
-  // own built-in Marathon defaults the whole time, without goal_type/race_date/marathon_plan_v2
-  // ever actually being explicitly saved. Checking for ANY data at all under this passcode is
-  // what correctly tells an established account apart from a genuinely fresh one.
-  const hasAnyData = await passcodeHasExistingData(ACTIVE_PASSCODE);
-  const isBrandNewPasscode = (goalTypeRaw === null) && !hasAnyData;
+  // Fully explicit now, no inference: "set up" means goal_type has actually been saved, full
+  // stop. Every previous version of this check tried to guess from surrounding data, and every
+  // version of that guess eventually broke for some real sequence of actions. This can't -
+  // there's no ambiguous state left to misread.
+  const isBrandNewPasscode = (goalTypeRaw === null);
   goalTypeGlobal = goalTypeRaw || 'Marathon'; // still need a sane internal value even pre-setup
   document.getElementById('activeGoalTypeFlag').textContent = isBrandNewPasscode ? 'Not set up' : goalTypeGlobal;
   // Nav label stays fixed ("Running Shit") regardless of goal type now - no longer
@@ -2450,7 +2766,7 @@ async function initPlan(){
       const dkey = addDays(week.monday, i);
       const isToday = dkey === todayStr;
       const runSession = week.days[dk];
-      const strengthType = STRENGTH_SCHEDULE[dk];
+      const strengthType = strengthScheduleGlobal[dk];
 
       let lines = '';
       if(runSession){
@@ -2491,7 +2807,13 @@ async function initPlan(){
   }
 
   document.getElementById('raceDate').addEventListener('change', async (e)=>{ await saveVal('race_date', e.target.value); renderZones(); renderMarathonTable(); });
-  document.getElementById('goalTime').addEventListener('change', async (e)=>{ await saveVal('goal_time', e.target.value); renderZones(); renderMarathonTable(); });
+  document.getElementById('goalTime').addEventListener('change', async (e)=>{
+    if(!/^\d{1,2}:\d{2}(:\d{2})?$/.test(e.target.value.trim())){
+      alert('Goal time needs to look like h:mm:ss (e.g. 3:45:00) or h:mm (e.g. 3:45). Not saved \u2014 fix the format and try again.');
+      return;
+    }
+    await saveVal('goal_time', e.target.value); renderZones(); renderMarathonTable();
+  });
 
   async function renderArchivedBlocks(){
     const archive = await loadPlanArchive();
@@ -2561,8 +2883,30 @@ async function initPlan(){
 
     if(!newRaceDate){ alert('Pick a race date first.'); return; }
     if(!justFinish && !enteredGoalTime){ alert('Enter a goal finish time, or check "just want to finish" instead.'); return; }
+    if(!justFinish && !/^\d{1,2}:\d{2}(:\d{2})?$/.test(enteredGoalTime)){ alert('Goal time needs to look like h:mm:ss (e.g. 3:45:00) or h:mm (e.g. 3:45).'); return; }
     if(justFinish && !enteredEasyPace){ alert('Enter your current comfortable pace so paces can still be calculated.'); return; }
     if(availableDays.length < 3){ alert('Pick at least 3 available days \u2014 fewer than that isn\u2019t enough to build a coherent plan around.'); return; }
+
+    // If the race is far enough out that the generator's base-phase cap would kick in, warn
+    // honestly about the resulting gap before generating anything, rather than silently
+    // handing back a plan with an unexplained hole in the middle.
+    {
+      const tmplCheck = PLAN_TEMPLATES[newGoalType] || PLAN_TEMPLATES.Marathon;
+      const mondayStartCheck = mondayOnOrBefore(toLocalISO(new Date()));
+      const raceMondayCheck = mondayOnOrBefore(newRaceDate);
+      const totalWeeksCheck = Math.round((new Date(raceMondayCheck) - new Date(mondayStartCheck)) / (7*86400000)) + 1;
+      const structuredWeeksCheck = Math.min(totalWeeksCheck, tmplCheck.idealWeeks);
+      const rawBaseWeeksCheck = Math.max(0, totalWeeksCheck - structuredWeeksCheck);
+      if(rawBaseWeeksCheck > 40){
+        const gapWeeks = rawBaseWeeksCheck - 40;
+        const proceedFar = confirm(
+          `Your race is quite far out (about ${Math.round(totalWeeksCheck/52*10)/10} years away). ` +
+          `This will generate roughly 9-10 months of base training starting now, then the real structured build phase picking back up closer to race day \u2014 with a gap of about ${gapWeeks} weeks in between where nothing's generated yet. ` +
+          `Come back and regenerate once you're closer to race day for a plan that reaches all the way through. Continue anyway?`
+        );
+        if(!proceedFar) return;
+      }
+    }
 
     const newGoalTime = justFinish ? deriveGoalTimeFromEasyPace(enteredEasyPace, newGoalType) : enteredGoalTime;
 
@@ -3071,15 +3415,17 @@ function renderHome(){
   const mondayStr = weekDates[0];
 
   // --- This Week stats ---
-  const actualWeek = weeklyData.weekly.find(w=>w.week===mondayStr);
-  const actualKm = actualWeek ? actualWeek.km : 0;
+  // Reuses computeDerived()'s thisWeek lookup rather than a second, separately-written
+  // Monday-matching query - one source of truth for "this week's km," so the Home stat
+  // and the Log stat can never quietly drift apart from each other again.
+  const actualKm = computeDerived().thisWeek.km || 0;
   const planWeek = marathonPlanGlobal.find(w=>w.monday===mondayStr);
   const plannedKm = planWeek ? homeWeekTotal(planWeek) : null;
 
   let strengthDone = 0;
-  Object.keys(STRENGTH_SCHEDULE).forEach((dayKey,i)=>{
+  Object.keys(strengthScheduleGlobal).forEach((dayKey,i)=>{
     const idx = DAY_KEYS.indexOf(dayKey);
-    if(isStrengthDone(weekDates[idx], STRENGTH_SCHEDULE[dayKey])) strengthDone++;
+    if(isStrengthDone(weekDates[idx], strengthScheduleGlobal[dayKey])) strengthDone++;
   });
 
   const habitPct = habitDayPct(todayStr);
@@ -3109,8 +3455,8 @@ function renderHome(){
   }
   const strengthDayKey = DAY_KEYS[weekDates.indexOf(todayStr)];
   let strengthHtml = '';
-  if(STRENGTH_SCHEDULE[strengthDayKey]){
-    const session = STRENGTH_SCHEDULE[strengthDayKey];
+  if(strengthScheduleGlobal[strengthDayKey]){
+    const session = strengthScheduleGlobal[strengthDayKey];
     const done = isStrengthDone(todayStr, session);
     strengthHtml = `<div class="home-row"><div class="t">Strength &middot; ${session}</div><span class="${done?'done':'pending'}">${done?'Done':'Not yet'}</span></div>`;
   }
@@ -3229,6 +3575,9 @@ async function initHabits(){
       document.getElementById('view-home').appendChild(banner);
     }
   }
+  try{
+    renderDailyMotivation();
+  }catch(e){ console.error('renderDailyMotivation failed:', e); }
 })();
 </script>
 </body>
