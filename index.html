@@ -310,16 +310,15 @@
 
   <!-- HOME VIEW -->
   <div class="view active" id="view-home">
-    <div class="card" style="text-align:center;padding:22px 24px;">
-      <p id="dailyQuoteText" style="font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;font-size:19px;color:#fff;margin:0;line-height:1.5;">&ldquo;&rdquo;</p>
-      <p id="dailyQuoteAuthor" style="font-size:10px;color:var(--text-dim);letter-spacing:0.14em;text-transform:uppercase;margin:12px 0 0;"></p>
-    </div>
-
-    <div class="card" style="padding:16px 20px;">
-      <div style="display:flex;align-items:baseline;gap:8px;">
-        <span style="font-size:9px;color:var(--accent);letter-spacing:0.14em;text-transform:uppercase;flex-shrink:0;font-weight:600;">Today I Learned</span>
+    <div class="card" id="dailyMotivationCard" style="padding:22px 24px;">
+      <div id="dailyQuoteBlock" style="display:none;text-align:center;">
+        <p id="dailyQuoteText" style="font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;font-size:19px;color:#fff;margin:0;line-height:1.5;">&ldquo;&rdquo;</p>
+        <p id="dailyQuoteAuthor" style="font-size:10px;color:var(--text-dim);letter-spacing:0.14em;text-transform:uppercase;margin:12px 0 0;"></p>
       </div>
-      <p id="dailyFactText" style="font-size:12px;color:var(--text-dim);line-height:1.6;margin:8px 0 0;"></p>
+      <div id="dailyFactBlock" style="display:none;text-align:left;">
+        <span style="font-size:9px;color:var(--accent);letter-spacing:0.14em;text-transform:uppercase;font-weight:600;">Today I Learned</span>
+        <p id="dailyFactText" style="font-size:13px;color:var(--text-dim);line-height:1.6;margin:8px 0 0;"></p>
+      </div>
     </div>
 
     <div class="card" style="padding:16px 20px;">
@@ -360,7 +359,7 @@
       <div id="homeTodayPlan"></div>
     </div>
 
-    <div class="card">
+    <div class="card" id="homeBodyCheckCard">
       <h2>Body Check <span class="flag" id="homeBodyCheckFlag" style="display:none;">check in on this</span></h2>
       <div class="pain-row">
         <div class="pain-label">Knee</div>
@@ -630,7 +629,7 @@
       </div>
     </div>
 
-    <div class="card">
+    <div class="card" id="strengthEditCard">
       <h2>Edit Strength Exercises <button id="toggleExerciseEditor" class="feel-btn" style="float:right;">Edit</button></h2>
       <div id="exerciseEditorBody" style="display:none;margin-top:14px;">
         <div id="exerciseEditorCategories"></div>
@@ -640,12 +639,12 @@
       <p class="note" style="margin-top:14px;">Running is the priority this cycle &mdash; if a week gets tight, shorten or skip a strength session before touching a run. No fixed days: log whichever session you actually do, whenever you do it.</p>
     </div>
 
-    <div class="card">
+    <div class="card" id="strengthWeekCard">
       <h2>This Week in Strength</h2>
       <div id="strengthWeekBody"></div>
     </div>
 
-    <div class="card">
+    <div class="card" id="strengthLogCard">
       <h2>Log Today's Session</h2>
       <div class="legend" id="strengthSessionTabs" style="margin-bottom:0;"></div>
       <div id="strengthSessionBody" style="margin-top:14px;"></div>
@@ -728,13 +727,13 @@
       <div id="eveningItems"></div>
     </div>
 
-    <div class="card">
+    <div class="card" id="painTrendCard">
       <h2>Body Check Trend</h2>
       <canvas id="painTrendChart" style="display:none;"></canvas>
       <p class="note" id="painTrendEmpty">Log a few Body Checks on the Home tab and this will chart how your knee and calf have been trending.</p>
     </div>
 
-    <div class="card">
+    <div class="card" id="volumePainCard">
       <h2>Volume vs. Body Check</h2>
       <canvas id="volumePainChart" style="display:none;"></canvas>
       <p class="note" id="volumePainEmpty">Log a few Body Checks and this will overlay your knee &amp; calf ratings on your weekly training volume, so you can see whether rising mileage lines up with rising discomfort.</p>
@@ -1325,16 +1324,30 @@ function getMomentumText(){
 // have both actually loaded (alongside renderHome(), not at the top of the init sequence),
 // since context-awareness and the momentum reflection both depend on that real data.
 function renderDailyMotivation(){
+  const quoteBlock = document.getElementById('dailyQuoteBlock');
+  const factBlock = document.getElementById('dailyFactBlock');
   const ctx = getContextMessage();
+  const now = new Date();
+  const dayOfYear = Math.floor((now - new Date(now.getFullYear(),0,0)) / 86400000);
+
   if(ctx){
+    // A real context match (Race/Long/Rest day) always wins over the flat alternation -
+    // it's more specifically relevant than either a generic quote or fact would be today.
+    quoteBlock.style.display = 'block';
+    factBlock.style.display = 'none';
     document.getElementById('dailyQuoteText').textContent = `\u201c${ctx}\u201d`;
     document.getElementById('dailyQuoteAuthor').textContent = "Today\u2019s focus";
-  } else {
+  } else if(dayOfYear % 2 === 0){
+    quoteBlock.style.display = 'block';
+    factBlock.style.display = 'none';
     const q = getDailyQuote();
     document.getElementById('dailyQuoteText').textContent = `\u201c${q.text}\u201d`;
     document.getElementById('dailyQuoteAuthor').textContent = q.author;
+  } else {
+    quoteBlock.style.display = 'none';
+    factBlock.style.display = 'block';
+    document.getElementById('dailyFactText').textContent = getDailyFact();
   }
-  document.getElementById('dailyFactText').textContent = getDailyFact();
   document.getElementById('momentumText').textContent = getMomentumText();
   document.getElementById('streakFlameNum').textContent = computeHabitStreak();
 }
@@ -1382,6 +1395,16 @@ let painTrendChartInstance = null;
 let liftHistoryChartInstance = null;
 let strengthLogGlobal = {};
 let strengthGoalsGlobal = {};
+let strengthProfileGlobal = null; // null = no explicit Strength setup done yet on this passcode
+let planProfileGlobal = null; // null = the running plan was never set up through the intake form (e.g. still on the file's own default)
+// Body Check only tracks knee and calf specifically - so its relevance is tied to whether
+// EITHER intake actually flagged one of those, not just "any injury exists." Strength's
+// injury list doesn't include "calf" as an option, so only "knee" is checked there.
+function shouldShowBodyCheck(){
+  const runFlags = (planProfileGlobal && planProfileGlobal.injuryFlags) || [];
+  const strengthFlags = (strengthProfileGlobal && strengthProfileGlobal.injuryFlags) || [];
+  return runFlags.includes('knee') || runFlags.includes('calf') || strengthFlags.includes('knee');
+}
 // Populated by initPlan() so the Home view can read the marathon plan, session
 // completions, and pace zones without duplicating that loading logic.
 let marathonPlanGlobal = [];
@@ -2388,7 +2411,18 @@ function initStrengthSessionLogger(){
   };
 }
 
-function initExerciseEditor(){
+async function initExerciseEditor(){
+  // Explicit flag, same pattern as the Running tab's onboarding fix - not an inferred guess.
+  // A brand new passcode with no saved strength_profile sees ONLY the setup card, never the
+  // exercise list, week view, or session logger - those stay hidden until real setup happens,
+  // so nobody mistakes someone else's actual program for a generic starting template.
+  const strengthProfileRaw = await storageGetSafe('strength_profile');
+  strengthProfileGlobal = strengthProfileRaw ? JSON.parse(strengthProfileRaw.value) : null;
+  const hasStrengthSetup = !!strengthProfileGlobal;
+  document.getElementById('strengthEditCard').style.display = hasStrengthSetup ? 'block' : 'none';
+  document.getElementById('strengthWeekCard').style.display = hasStrengthSetup ? 'block' : 'none';
+  document.getElementById('strengthLogCard').style.display = hasStrengthSetup ? 'block' : 'none';
+
   const toggleBtn = document.getElementById('toggleExerciseEditor');
   const body = document.getElementById('exerciseEditorBody');
   toggleBtn.addEventListener('click', ()=>{
@@ -2402,7 +2436,10 @@ function initExerciseEditor(){
     strengthScheduleGlobal = JSON.parse(JSON.stringify(DEFAULT_STRENGTH_SCHEDULE));
     try{ await storageDeleteSafe('custom_exercises'); }catch(e){ /* key may not exist yet - fine */ }
     try{ await storageDeleteSafe('strength_schedule'); }catch(e){ /* key may not exist yet - fine */ }
-    try{ await storageDeleteSafe('strength_profile'); }catch(e){ /* key may not exist yet - fine */ }
+    // Deliberately NOT deleting strength_profile here - that flag controls whether the
+    // exercise list, week view, and logger show at all. Wiping it on "reset to defaults"
+    // would hide everything and dump the person back at the setup screen instead of just
+    // giving them a fresh default program, which is what this button actually promises.
     recomputeExercise1RMReps();
     renderExerciseEditor();
     if(window._replan) window._replan();
@@ -2565,13 +2602,17 @@ async function initPlan(){
   recomputeExercise1RMReps();
   const savedSchedule = await loadStrengthSchedule();
   if(savedSchedule) strengthScheduleGlobal = savedSchedule;
-  initExerciseEditor();
+  await initExerciseEditor();
   strengthLogGlobal = await loadStrengthLog();
   strengthGoalsGlobal = await loadStrengthGoals();
   strengthSessionCompletion = await loadStrengthSessionCompletion();
   initStrengthSessionLogger();
 
   const goalTypeRaw = await loadGoalType();
+  try{
+    const planProfileRaw = await storageGetSafe('plan_profile');
+    planProfileGlobal = planProfileRaw ? JSON.parse(planProfileRaw.value) : null;
+  }catch(e){ planProfileGlobal = null; }
   // Fully explicit now, no inference: "set up" means goal_type has actually been saved, full
   // stop. Every previous version of this check tried to guess from surrounding data, and every
   // version of that guess eventually broke for some real sequence of actions. This can't -
@@ -3388,6 +3429,15 @@ function renderVolumePainChart(){
 }
 
 async function initPainCheck(){
+  // Body Check only makes sense for someone who's actually flagged a relevant issue at
+  // setup - showing it to everyone by default was presenting an old injury-specific feature
+  // as if it were a universal one. Hidden (not just left inert) when neither intake flagged
+  // knee or calf specifically.
+  const showBodyCheck = shouldShowBodyCheck();
+  document.getElementById('homeBodyCheckCard').style.display = showBodyCheck ? 'block' : 'none';
+  document.getElementById('painTrendCard').style.display = showBodyCheck ? 'block' : 'none';
+  document.getElementById('volumePainCard').style.display = showBodyCheck ? 'block' : 'none';
+
   painLog = await loadPainLog();
   renderPainCheck();
   renderPainTrendChart();
