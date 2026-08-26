@@ -362,7 +362,7 @@
       <div id="homeTodayPlan"></div>
     </div>
 
-    <div class="card" id="homeBodyCheckCard">
+    <div class="card" id="homeBodyCheckCard" style="display:none;">
       <h2>Body Check <span class="flag" id="homeBodyCheckFlag" style="display:none;">check in on this</span></h2>
       <div class="pain-row">
         <div class="pain-label">Knee</div>
@@ -424,6 +424,25 @@
       <p class="note">Easy = conversational, most of your weekly volume. Long run = slightly easier than goal pace, for endurance. Tempo = comfortably hard, sustained effort. Interval = short, fast reps for speed &amp; VO2max.</p>
       <p class="note">HR ranges are calibrated from your actual recent runs, not the generic Strava zone chart. "Now" reflects what's realistic today; "Goal" is what to work toward as fitness builds. Lead with pace/conversational effort; only back off if HR runs far outside the "Now" range.</p>
       <p class="note">"Reset This Plan" wipes any edits and session completions but keeps the same goal, race date, and time &mdash; use it if you've messed something up and want a clean slate for what you're already training for. To switch to a different goal or race entirely, use "Start New Training Block" below instead.</p>
+    </div>
+
+    <div class="card" id="trainingPlanCard" style="display:none;">
+      <h2>Training Plan <span class="flag">built with you — fully editable</span></h2>
+      <div class="legend">
+        <span><i style="background:var(--track)"></i>Easy</span>
+        <span><i style="background:var(--telemetry)"></i>Tempo</span>
+        <span><i style="background:var(--amber)"></i>Interval</span>
+        <span><i style="background:var(--rust)"></i>Long run</span>
+        <span><i style="background:var(--gold)"></i>Race</span>
+        <span><i style="background:var(--line)"></i>Rest</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th></th><th>Wk</th><th>Dates</th><th>Note</th><th>Total</th></tr></thead>
+          <tbody id="marathonPlanBody"></tbody>
+        </table>
+      </div>
+      <p class="note">Tap a week to see the full day-by-day breakdown with session details, and tick off each one as you complete it. This plan isn't self-editing &mdash; if anything needs to change, tell Claude in chat and it'll update it here. Running only: strength sessions live on the Strength tab.</p>
     </div>
 
     <div class="card">
@@ -538,24 +557,6 @@
       <div id="archivedBlocksList"><p class="note" style="margin:0;">Nothing archived yet.</p></div>
     </div>
 
-    <div class="card" id="trainingPlanCard" style="display:none;">
-      <h2>Training Plan <span class="flag">built with you — fully editable</span></h2>
-      <div class="legend">
-        <span><i style="background:var(--track)"></i>Easy</span>
-        <span><i style="background:var(--telemetry)"></i>Tempo</span>
-        <span><i style="background:var(--amber)"></i>Interval</span>
-        <span><i style="background:var(--rust)"></i>Long run</span>
-        <span><i style="background:var(--gold)"></i>Race</span>
-        <span><i style="background:var(--line)"></i>Rest</span>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th></th><th>Wk</th><th>Dates</th><th>Note</th><th>Total</th></tr></thead>
-          <tbody id="marathonPlanBody"></tbody>
-        </table>
-      </div>
-      <p class="note">Tap a week to see the full day-by-day breakdown with session details, and tick off each one as you complete it. This plan isn't self-editing &mdash; if anything needs to change, tell Claude in chat and it'll update it here. Running only: strength sessions live on the Strength tab.</p>
-    </div>
   </div>
 
   <!-- STRENGTH VIEW -->
@@ -730,13 +731,13 @@
       <div id="eveningItems"></div>
     </div>
 
-    <div class="card" id="painTrendCard">
+    <div class="card" id="painTrendCard" style="display:none;">
       <h2>Body Check Trend</h2>
       <canvas id="painTrendChart" style="display:none;"></canvas>
       <p class="note" id="painTrendEmpty">Log a few Body Checks on the Home tab and this will chart how your knee and calf have been trending.</p>
     </div>
 
-    <div class="card" id="volumePainCard">
+    <div class="card" id="volumePainCard" style="display:none;">
       <h2>Volume vs. Body Check</h2>
       <canvas id="volumePainChart" style="display:none;"></canvas>
       <p class="note" id="volumePainEmpty">Log a few Body Checks and this will overlay your knee &amp; calf ratings on your weekly training volume, so you can see whether rising mileage lines up with rising discomfort.</p>
