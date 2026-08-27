@@ -1638,7 +1638,7 @@ async function manualStravaRefresh(){
   try{
     const res = await fetch(STRAVA_MANUAL_SYNC_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
       body: JSON.stringify({ passcode: ACTIVE_PASSCODE }),
     });
     const result = await res.json();
@@ -1774,7 +1774,7 @@ async function passcodeHasExistingData(passcode){
   try{
     const res = await fetch(KV_STORE_PROXY_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
       body: JSON.stringify({ action: 'exists', passcode }),
     });
     const result = await res.json();
@@ -1903,7 +1903,7 @@ const KV_STORE_PROXY_URL = 'https://mefuldlvyaorzulrnnyx.supabase.co/functions/v
 async function kvProxyCall(action, key, value){
   const res = await fetch(KV_STORE_PROXY_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
     body: JSON.stringify({ action, passcode: ACTIVE_PASSCODE, key, value }),
   });
   const result = await res.json();
@@ -2293,7 +2293,7 @@ async function triggerPushNotification(toPulseId, title, body){
   try{
     await fetch(PUSH_NOTIFY_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
       body: JSON.stringify({ pulseId: toPulseId, title, body }),
     });
   }catch(e){ console.warn('Push notification trigger failed:', e); }
