@@ -481,8 +481,8 @@
         </div>
         <div class="field-row" id="newBlockPushPaceRow" style="display:none;">
           <div class="field">
-            <label>5K push pace right now, if you raced one today (min/km)</label>
-            <input type="text" id="newBlockPushPace" placeholder="e.g. 5:15 (optional)">
+            <label>Recent 5K time, if you've raced or timed one (mm:ss)</label>
+            <input type="text" id="newBlockPushPace" placeholder="e.g. 22:30 (optional)">
           </div>
         </div>
         <p class="note" id="newBlockRealismNote" style="display:none;"></p>
@@ -777,6 +777,10 @@
         <input type="text" id="pulseNameInput" placeholder="e.g. Alex" maxlength="24" style="max-width:220px;">
       </div>
       <button class="feel-btn" id="savePulseSettingsBtn" style="margin-top:10px;">Save</button>
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line);">
+        <p class="note" id="pushNotifNote" style="margin-top:0;">Get notified when someone sends you kudos, even if the app isn't open.</p>
+        <button class="feel-btn" id="enablePushBtn" style="padding:9px 18px;">Enable Notifications</button>
+      </div>
     </div>
 
     <div class="card">
@@ -900,10 +904,20 @@ const REST_DAY = null;
 // recreational runner. Not a substitute for a plan actually built together in chat, but a
 // real progressive structure (build -> deload -> taper -> race) rather than a blank table.
 const PLAN_TEMPLATES = {
-  Marathon: { idealWeeks:18, taperWeeks:3, peakWeeklyKm:65, peakLongKm:32, fiveDayCapable:true,  qualityMix:['Tempo','Tempo','Interval'] },
-  Half:     { idealWeeks:12, taperWeeks:2, peakWeeklyKm:45, peakLongKm:18, fiveDayCapable:true,  qualityMix:['Tempo','Tempo','Interval'] },
-  '10K':    { idealWeeks:10, taperWeeks:1, peakWeeklyKm:35, peakLongKm:13, fiveDayCapable:false, qualityMix:['Interval','Tempo'] },
-  '5K':     { idealWeeks:8,  taperWeeks:1, peakWeeklyKm:28, peakLongKm:10, fiveDayCapable:false, qualityMix:['Interval','Tempo'] },
+  // taperTable: one entry per taper week, ordered furthest-from-race first, ending with race
+  // week. weekKmPct is that week's volume as a fraction of peak weekly km. longKmPct is that
+  // week's long run as a fraction of peak long run km, or null if that week shouldn't have a
+  // dedicated long run at all (race week never does - see the safety pass in
+  // buildStructuredWeek, which also handles the case of a 1-week taper landing tighter than
+  // planned for a given race date).
+  Marathon: { idealWeeks:18, taperWeeks:3, peakWeeklyKm:65, peakLongKm:32, fiveDayCapable:true,  qualityMix:['Tempo','Tempo','Interval'],
+    taperTable: [ {weekKmPct:0.85, longKmPct:0.65}, {weekKmPct:0.70, longKmPct:0.50}, {weekKmPct:0.45, longKmPct:null} ] },
+  Half:     { idealWeeks:12, taperWeeks:2, peakWeeklyKm:45, peakLongKm:18, fiveDayCapable:true,  qualityMix:['Tempo','Tempo','Interval'],
+    taperTable: [ {weekKmPct:0.78, longKmPct:0.80}, {weekKmPct:0.45, longKmPct:null} ] },
+  '10K':    { idealWeeks:10, taperWeeks:1, peakWeeklyKm:35, peakLongKm:13, fiveDayCapable:false, qualityMix:['Interval','Tempo'],
+    taperTable: [ {weekKmPct:0.72, longKmPct:null} ] },
+  '5K':     { idealWeeks:8,  taperWeeks:1, peakWeeklyKm:28, peakLongKm:10, fiveDayCapable:false, qualityMix:['Interval','Tempo'],
+    taperTable: [ {weekKmPct:0.75, longKmPct:null} ] },
 };
 
 // Picks `count` run days spread across whichever days are actually available, rather than
@@ -957,7 +971,7 @@ function buildBaseWeek(monday, weekKm, availableDays, preferredLongDay){
 }
 
 function buildStructuredWeek(opts){
-  const { monday, goalType, weekKm, longKm, qualityType, isFinalRaceWeek, raceDateStr, peakWeeklyKm,
+  const { monday, goalType, weekKm, longKm, hasLongRun, qualityType, isFinalRaceWeek, raceDateStr, peakWeeklyKm,
           fiveDayCapable, availableDays, preferredLongDay, experienceLevel } = opts;
   const days = { Mon:REST_DAY, Tue:REST_DAY, Wed:REST_DAY, Thu:REST_DAY, Fri:REST_DAY, Sat:REST_DAY, Sun:REST_DAY };
   const nDays = runDayCountForVolume(weekKm, peakWeeklyKm, fiveDayCapable, availableDays.length, experienceLevel);
@@ -966,25 +980,31 @@ function buildStructuredWeek(opts){
   const qualityDay = slots[0];
   const easyDays = slots.slice(1,-1);
 
-  days[longDay] = d('Long', longKm, 'Slightly easier than goal pace \u2014 builds endurance.');
+  if(hasLongRun){
+    days[longDay] = d('Long', longKm, 'Slightly easier than goal pace \u2014 builds endurance.');
+  }
 
   // Split the remaining volume across every non-long day evenly. When there's a quality
   // session, it gets its own (smaller) allocation first and the rest splits across the
   // plain easy days; when there isn't yet, the quality-day slot is just another easy day
   // and joins that same even split - keeping this in one pool is what keeps the long run
   // reliably the biggest single day, rather than two separate calculations double-booking it.
+  // When there's no dedicated long run this week (hasLongRun:false), the "long day" slot
+  // just joins the same easy pool as everything else instead of standing empty.
+  const nonLongSlots = hasLongRun ? easyDays : [...easyDays, longDay];
+  const effectiveLongKm = hasLongRun ? longKm : 0;
   if(qualityType){
     const qualityKm = Math.max(4, Math.round(weekKm*0.16));
     days[qualityDay] = qualityType==='Tempo'
       ? d('Tempo', qualityKm, `Easy warm-up, ${Math.max(2,qualityKm-3)}km @ tempo pace, easy cooldown`)
       : d('Interval', qualityKm, `Easy warm-up, intervals @ interval pace with jog recovery, easy cooldown`);
-    const remainingEasyKm = Math.max(3*easyDays.length, weekKm - longKm - qualityKm);
-    const perEasyDay = Math.min(longKm, Math.max(3, Math.round(remainingEasyKm/Math.max(1,easyDays.length))));
-    easyDays.forEach(dk=>{ days[dk] = d('Easy', perEasyDay, 'Conversational effort throughout'); });
+    const remainingEasyKm = Math.max(3*nonLongSlots.length, weekKm - effectiveLongKm - qualityKm);
+    const perEasyDay = Math.min(Math.max(longKm,8), Math.max(3, Math.round(remainingEasyKm/Math.max(1,nonLongSlots.length))));
+    nonLongSlots.forEach(dk=>{ days[dk] = d('Easy', perEasyDay, 'Conversational effort throughout'); });
   } else {
-    const easySlots = [qualityDay, ...easyDays];
-    const remainingEasyKm = Math.max(3*easySlots.length, weekKm - longKm);
-    const perEasyDay = Math.min(longKm, Math.max(3, Math.round(remainingEasyKm/easySlots.length)));
+    const easySlots = [qualityDay, ...nonLongSlots];
+    const remainingEasyKm = Math.max(3*easySlots.length, weekKm - effectiveLongKm);
+    const perEasyDay = Math.min(Math.max(longKm,8), Math.max(3, Math.round(remainingEasyKm/easySlots.length)));
     easySlots.forEach(dk=>{ days[dk] = d('Easy', perEasyDay, 'Conversational effort throughout'); });
   }
 
@@ -999,6 +1019,28 @@ function buildStructuredWeek(opts){
     });
     days[raceDow] = d('Race', GOAL_TYPE_DISTANCES[goalType], 'Race day \u2014 go get it.');
   }
+
+  // Universal safety pass, independent of which nominal week this is - checks every day's
+  // ACTUAL calendar distance to race day. This is what actually prevents a long/tempo/interval
+  // session from landing dangerously close to (or the day before) race day: the isFinalRaceWeek
+  // block above only ever protects the literal final week, but a hard or long session
+  // scheduled in an EARLIER week can still land right next to race day if the calendar happens
+  // to line up that way (e.g. a Sunday long run the week before a Monday race). Research
+  // consistently puts the "easy/shakeout only" window at the final 4-7 days before race day
+  // across all distances, so anything inside 5 days gets downgraded, and the final 2 days drop
+  // to a genuine short shakeout regardless of what was originally planned.
+  const raceDate = new Date(raceDateStr+'T00:00:00');
+  DAY_KEYS.forEach((dk,i)=>{
+    if(!days[dk] || days[dk].type==='Race' || days[dk].type==='Rest') return;
+    const thisDate = new Date(addDays(monday, i)+'T00:00:00');
+    const daysUntilRace = Math.round((raceDate - thisDate) / 86400000);
+    if(daysUntilRace <= 0) return; // race day itself or after - already handled separately / not relevant
+    if(daysUntilRace <= 2 && (days[dk].type==='Long' || days[dk].type==='Tempo' || days[dk].type==='Interval' || (days[dk].km||0) > 5)){
+      days[dk] = d('Easy', 3, 'Very short shakeout \u2014 legs should feel fresh, not tired, with race day this close');
+    } else if(daysUntilRace <= 5 && (days[dk].type==='Long' || days[dk].type==='Tempo' || days[dk].type==='Interval')){
+      days[dk] = d('Easy', Math.min(6, days[dk].km||6), 'Short and easy \u2014 race day is close, stay fresh rather than chasing more fitness now');
+    }
+  });
 
   return { monday, days };
 }
@@ -1066,31 +1108,58 @@ function generateFullPlan(goalType, raceDateStr, profile){
   // capped above, there's an intentional gap in the middle rather than a wrong race date.
   monday = addDays(raceMonday, -7*(structuredWeeks-1));
 
-  const buildWeeks = Math.max(1, structuredWeeks - tmpl.taperWeeks);
+  const buildWeeks = Math.max(0, structuredWeeks - tmpl.taperWeeks);
   let qualityIdx = 0;
   for(let w=0; w<structuredWeeks; w++){
     const isTaper = w >= buildWeeks;
     const isFinalRaceWeek = (w === structuredWeeks-1);
-    let weekKm;
+    let weekKm, longKmPct;
     if(isTaper){
-      const taperPos = w - buildWeeks;
-      const taperFrac = tmpl.taperWeeks<=1 ? 0 : taperPos/(tmpl.taperWeeks-1);
-      weekKm = Math.round(peakWeeklyKm * (isFinalRaceWeek ? 0.35 : (0.75 - 0.25*taperFrac)));
+      // Index from the END of the taper table (race week is always the last entry) rather
+      // than the start - if the available timeline is shorter than this distance's ideal
+      // taper length, this guarantees whatever weeks ARE available get the correct, more
+      // conservative treatment for how close they actually are to race day, instead of
+      // mistakenly starting at the table's easiest/earliest entry.
+      const taperWeeksRemaining = structuredWeeks - w;
+      const tableIdx = Math.max(0, tmpl.taperTable.length - taperWeeksRemaining);
+      const taperEntry = tmpl.taperTable[tableIdx];
+      weekKm = Math.round(peakWeeklyKm * taperEntry.weekKmPct);
+      longKmPct = taperEntry.longKmPct;
     } else {
       const buildFrac = buildWeeks<=1 ? 1 : w/(buildWeeks-1);
       weekKm = Math.round(startKm + (peakWeeklyKm - startKm) * buildFrac);
       if((w+1)%4===0 && w!==buildWeeks-1) weekKm = Math.round(weekKm*0.75); // deload every 4th build week
+      longKmPct = null; // build-phase long run uses the normal weekKm-based ratio, not a taper-specific one
     }
-    const longKm = Math.round(Math.min(peakLongKm, weekKm*0.36));
+    const longKm = longKmPct !== null
+      ? Math.round(peakLongKm * longKmPct)
+      : Math.round(Math.min(peakLongKm, weekKm*0.36));
+    const hasLongRun = !(isTaper && longKmPct === null); // taper weeks with longKmPct:null (race week) get no dedicated long run at all
     const inEasyBasePhase = !isTaper && w < buildWeeks*easyBaseFraction;
     const qualityType = inEasyBasePhase ? null : tmpl.qualityMix[qualityIdx % tmpl.qualityMix.length];
     if(qualityType) qualityIdx++;
     weeks.push(buildStructuredWeek({
-      monday, goalType, weekKm, longKm, qualityType, isTaper, isFinalRaceWeek, raceDateStr,
+      monday, goalType, weekKm, longKm, hasLongRun, qualityType, isTaper, isFinalRaceWeek, raceDateStr,
       peakWeeklyKm, fiveDayCapable: tmpl.fiveDayCapable, availableDays, preferredLongDay, experienceLevel,
     }));
     monday = addDays(monday, 7);
   }
+
+  // The plan is Monday-aligned throughout (everything else in the app - schedules, the week
+  // calendar, weekly stats - keys off Monday-start weeks too), but if today isn't a Monday,
+  // that first generated week partially overlaps days already in the past. Rather than
+  // silently filling those with a normal training session (which would look like the plan
+  // expects something to have already happened before it existed), today is where real
+  // training actually starts - anything before it in week one is cleared to rest.
+  if(weeks.length > 0){
+    const todayStr = toLocalISO(new Date());
+    const firstWeek = weeks[0];
+    DAY_KEYS.forEach((dk,i)=>{
+      const dateStr = addDays(firstWeek.monday, i);
+      if(dateStr < todayStr) firstWeek.days[dk] = REST_DAY;
+    });
+  }
+
   return weeks;
 }
 
@@ -1364,13 +1433,14 @@ function renderDailyMotivation(){
   const dayOfYear = Math.floor((now - new Date(now.getFullYear(),0,0)) / 86400000);
 
   if(ctx){
-    // A real context match (Race/Long/Rest day) always wins over the flat alternation -
-    // it's more specifically relevant than either a generic quote or fact would be today.
+    // A real context match (Race/Long day) always wins over the flat rotation - it's more
+    // specifically relevant than either a generic quote or fact would be today.
     quoteBlock.style.display = 'block';
     factBlock.style.display = 'none';
     document.getElementById('dailyQuoteText').textContent = `\u201c${ctx}\u201d`;
     document.getElementById('dailyQuoteAuthor').textContent = "Today\u2019s focus";
-  } else if(dayOfYear % 2 === 0){
+  } else if(dayOfYear % 7 < 5){
+    // 5:2 ratio - quotes most days, a training fact for variety roughly 2 days out of 7.
     quoteBlock.style.display = 'block';
     factBlock.style.display = 'none';
     const q = getDailyQuote();
@@ -1552,6 +1622,48 @@ async function loadStravaSnapshot(){
   }catch(e){ console.warn('Could not load Strava snapshot - showing the last-known fallback data instead:', e); }
 }
 
+const STRAVA_MANUAL_SYNC_URL = 'https://mefuldlvyaorzulrnnyx.supabase.co/functions/v1/strava-manual-sync';
+let stravaRefreshCooldownUntil = 0;
+async function manualStravaRefresh(){
+  const btn = document.getElementById('refreshBtn');
+  const txt = document.getElementById('statusText');
+  const dot = document.getElementById('statusDot');
+  if(Date.now() < stravaRefreshCooldownUntil){
+    const secsLeft = Math.ceil((stravaRefreshCooldownUntil - Date.now())/1000);
+    txt.textContent = `Just synced \u2014 try again in ${secsLeft}s.`;
+    return;
+  }
+  btn.disabled = true;
+  txt.textContent = 'Syncing with Strava\u2026';
+  try{
+    const res = await fetch(STRAVA_MANUAL_SYNC_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ passcode: ACTIVE_PASSCODE }),
+    });
+    const result = await res.json();
+    if(result.error === 'not_connected'){
+      txt.textContent = 'Not connected to Strava yet \u2014 use "Connect to Strava" below first.';
+    } else if(!res.ok || result.error){
+      throw new Error(result.error || `HTTP ${res.status}`);
+    } else {
+      await loadStravaSnapshot();
+      renderLog();
+      renderWeekCalendar(thisWeekActivities);
+      const d = new Date(stravaSyncedAt);
+      txt.textContent = 'Synced from Strava ' + d.toLocaleDateString('en-GB',{day:'numeric',month:'short'}) + ' ' + d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+      dot.classList.remove('err');
+      renderHome();
+    }
+  }catch(e){
+    console.warn('Manual Strava refresh failed:', e);
+    txt.textContent = 'Refresh didn\u2019t go through \u2014 try again shortly.';
+  }finally{
+    btn.disabled = false;
+    stravaRefreshCooldownUntil = Date.now() + 30000; // 30s cooldown - plenty for casual use, protects against accidental rate-limit hammering
+  }
+}
+
 function initStatusBar(){
   const dot = document.getElementById('statusDot');
   const txt = document.getElementById('statusText');
@@ -1563,9 +1675,7 @@ function initStatusBar(){
     txt.textContent = 'Showing fallback data \u2014 no Strava sync found yet';
     dot.classList.add('err');
   }
-  document.getElementById('refreshBtn').addEventListener('click', ()=>{
-    txt.textContent = 'Syncs automatically in the background \u2014 nothing to press. Check the strava-sync Action in GitHub if this looks stale.';
-  });
+  document.getElementById('refreshBtn').addEventListener('click', manualStravaRefresh);
 }
 
 function showView(viewName){
@@ -1598,6 +1708,12 @@ const supabaseClient = (typeof window.supabase !== 'undefined' && SUPABASE_URL.s
 // whichever passcode initiated it, so everyone's data stays separate automatically.
 const STRAVA_CLIENT_ID = '256060';
 const STRAVA_OAUTH_CALLBACK_URL = 'https://mefuldlvyaorzulrnnyx.supabase.co/functions/v1/strava-oauth-callback';
+
+// ---- Push notifications: requires sw.js deployed at the repo root, a VAPID key pair (see
+// send-push-notification.ts for how to generate one), and the PUBLIC half pasted below - the
+// public key is safe to expose, only the private half (kept in the Edge Function) is secret.
+const PUSH_NOTIFY_URL = 'https://mefuldlvyaorzulrnnyx.supabase.co/functions/v1/send-push-notification';
+const PUSH_VAPID_PUBLIC_KEY = ''; // paste your generated VAPID public key here
 
 function connectStrava(){
   const redirectUri = encodeURIComponent(STRAVA_OAUTH_CALLBACK_URL);
@@ -1980,6 +2096,7 @@ async function sendPulseKudos(toPulseId, toName){
     record.kudosInbox.unshift({ from: pulseSettingsGlobal.name || 'Someone', at: new Date().toISOString() });
     record.kudosInbox = record.kudosInbox.slice(0, 10);
     await pulseSharedSet(toPulseId, JSON.stringify(record));
+    triggerPushNotification(toPulseId, 'Training Pulse', `${pulseSettingsGlobal.name || 'Someone'} sent you kudos! \u{1F44F}`);
     renderTrainingPulseTile();
   }catch(e){ console.warn('Send kudos failed:', e); }
 }
@@ -2107,6 +2224,67 @@ function subscribeTrainingPulseRealtime(){
       )
       .subscribe();
   }catch(e){ console.warn('Training Pulse realtime subscription failed to start:', e); }
+}
+
+function urlBase64ToUint8Array(base64String){
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+}
+
+async function enablePushNotifications(){
+  const note = document.getElementById('pushNotifNote');
+  if(!('serviceWorker' in navigator) || !('PushManager' in window)){
+    note.textContent = 'Push notifications aren\u2019t supported in this browser.';
+    return;
+  }
+  if(!PUSH_VAPID_PUBLIC_KEY){
+    note.textContent = 'Not set up yet on this deployment \u2014 needs a VAPID key pasted into index.html (see send-push-notification.ts for how to generate one).';
+    return;
+  }
+  if(!pulseSettingsGlobal.enabled || !pulseSettingsGlobal.pulseId){
+    note.textContent = 'Turn on Training Pulse above first \u2014 notifications are tied to your Pulse identity, not your passcode, so nobody else\u2019s device can ever see your real passcode.';
+    return;
+  }
+  try{
+    const permission = await Notification.requestPermission();
+    if(permission !== 'granted'){
+      note.textContent = 'Notifications blocked \u2014 enable them for this site in your browser settings if you change your mind.';
+      return;
+    }
+    const registration = await navigator.serviceWorker.register('/DASHBOARD/sw.js');
+    const subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(PUSH_VAPID_PUBLIC_KEY),
+    });
+    // Stored INSIDE the shared Pulse record (keyed by pulseId), not under the real passcode -
+    // a kudos-sender only ever has the recipient's pulseId, never their actual passcode, so
+    // this is the only place a push subscription could be looked up from without leaking
+    // passcodes into the shared bucket.
+    const record = await getOrInitPulseRecord();
+    record.pushSubscription = subscription;
+    await pulseSharedSet(pulseSettingsGlobal.pulseId, JSON.stringify(record));
+    note.textContent = 'Notifications enabled \u2014 you\u2019ll get a ping when someone sends you kudos.';
+  }catch(e){
+    console.warn('Enabling push notifications failed:', e);
+    note.textContent = 'Something went wrong enabling notifications \u2014 try again, or check the browser console.';
+  }
+}
+
+// Fire-and-forget: called after actions worth notifying about (kudos, for now). Takes the
+// recipient's pulseId (never their real passcode - the sender never has that, by design).
+// Silently does nothing if the recipient hasn't enabled notifications - the Edge Function
+// itself treats that as a normal, non-error outcome, not a failure.
+async function triggerPushNotification(toPulseId, title, body){
+  if(!PUSH_VAPID_PUBLIC_KEY) return;
+  try{
+    await fetch(PUSH_NOTIFY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pulseId: toPulseId, title, body }),
+    });
+  }catch(e){ console.warn('Push notification trigger failed:', e); }
 }
 
 
@@ -3586,11 +3764,11 @@ async function initPlan(){
     if(!justFinish){
       let reference = findRealisticEffort(weeklyData.recent);
       if(!reference){
-        const pushPaceStr = document.getElementById('newBlockPushPace').value.trim();
-        if(pushPaceStr){
-          const parts = pushPaceStr.split(':').map(Number);
-          const paceSec = (parts[0]||0)*60 + (parts[1]||0);
-          if(paceSec > 0) reference = { paceSecPerKm: paceSec, distanceKm: 5 };
+        const pushTimeStr = document.getElementById('newBlockPushPace').value.trim();
+        if(pushTimeStr){
+          const parts = pushTimeStr.split(':').map(Number);
+          const totalSec = parts.length === 3 ? parts[0]*3600 + parts[1]*60 + parts[2] : (parts[0]||0)*60 + (parts[1]||0);
+          if(totalSec > 0) reference = { paceSecPerKm: totalSec/5, distanceKm: 5 };
         }
       }
       if(reference){
@@ -4307,6 +4485,7 @@ async function initHabits(){
       renderHome();
     });
     if(pulseSettingsGlobal.enabled) await updateTrainingPulseIfEnabled();
+    document.getElementById('enablePushBtn').addEventListener('click', enablePushNotifications);
   }catch(e){
     console.error('Training Pulse init failed:', e);
   }
