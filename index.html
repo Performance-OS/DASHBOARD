@@ -136,6 +136,7 @@
   .ex-editor-row input[type=text].ex-reps{width:110px;}
   .ex-editor-row input[type=number].ex-sets{width:62px;padding:9px 8px;font-family:'IBM Plex Mono',monospace;font-size:13px;}
   .ex-editor-row label.ex-weighted-lbl{font-size:11px;color:var(--text-dim);display:flex;align-items:center;gap:5px;}
+  .ex-editor-row select.ex-swap{width:150px;font-size:11px;padding:8px;}
   .ex-remove-btn{background:rgba(255,255,255,0.05);border:1px solid var(--line);color:var(--redline);border-radius:10px;padding:7px 10px;cursor:pointer;font-size:12px;transition:all .15s ease;}
   .ex-remove-btn:hover{border-color:rgba(217,83,79,0.5);}
   .ex-add-btn{margin-top:2px;}
@@ -561,11 +562,21 @@
 
   <!-- STRENGTH VIEW -->
   <div class="view" id="view-strength">
-    <div class="card">
-      <h2>Set Up Your Strength Program</h2>
-      <p class="note" style="margin-top:0;">Answer a few questions and a program gets generated across the existing Upper / Lower / Core split &mdash; picks appropriate exercises and set/rep ranges for your goal, equipment, and anything you're managing. Replaces your current exercise list below; your logged weight history stays saved under each exercise's name either way.</p>
+    <div class="card" id="strengthSetupCard">
+      <h2 id="strengthSetupHeading">Set Up Your Strength Program</h2>
+      <p class="note" style="margin-top:0;" id="strengthSetupIntro">Answer a few questions and a program gets generated across whichever split you pick below &mdash; picks appropriate exercises and set/rep ranges for your goal, equipment, and anything you're managing. Replaces your current exercise list below; your logged weight history stays saved under each exercise's name either way.</p>
       <button class="cta-btn" id="strengthSetupBtn" style="margin-top:12px;">Set Up My Program</button>
       <div id="strengthSetupForm" style="display:none;margin-top:16px;padding-top:16px;border-top:1px solid var(--line);">
+        <div class="field" style="margin-bottom:14px;">
+          <label>Split style</label>
+          <select id="strengthSplit">
+            <option value="upperLowerCore">Upper / Lower / Core</option>
+            <option value="pushPullLegs">Push / Pull / Legs</option>
+            <option value="upperLower">Upper / Lower (2-day)</option>
+            <option value="fullBody">Full Body</option>
+          </select>
+          <p class="note" id="strengthSplitBlurb" style="margin-top:6px;"></p>
+        </div>
         <div class="field-row">
           <div class="field">
             <label>Main goal</label>
@@ -599,35 +610,17 @@
             <label class="day-toggle"><input type="checkbox" value="knee"><span>Knee</span></label>
             <label class="day-toggle"><input type="checkbox" value="shoulder"><span>Shoulder</span></label>
             <label class="day-toggle"><input type="checkbox" value="wrist"><span>Wrist</span></label>
+            <label class="day-toggle"><input type="checkbox" value="ankle"><span>Ankle/Achilles</span></label>
+            <label class="day-toggle"><input type="checkbox" value="hip"><span>Hip</span></label>
+            <label class="day-toggle"><input type="checkbox" value="neck"><span>Neck</span></label>
+            <label class="day-toggle"><input type="checkbox" value="elbow"><span>Elbow</span></label>
           </div>
           <p class="note" style="margin-top:6px;">Leave unchecked if none apply. Anything checked here swaps out exercises that tend to aggravate that area for gentler alternatives that train the same muscles.</p>
         </div>
         <div class="field" style="margin-top:14px;">
           <label>Which day for each session?</label>
-          <div class="field-row" style="margin-top:8px;">
-            <div class="field">
-              <label>Upper</label>
-              <select id="strengthUpperDay">
-                <option value="Mon">Monday</option><option value="Tue">Tuesday</option><option value="Wed">Wednesday</option>
-                <option value="Thu">Thursday</option><option value="Fri">Friday</option><option value="Sat">Saturday</option><option value="Sun">Sunday</option>
-              </select>
-            </div>
-            <div class="field">
-              <label>Lower</label>
-              <select id="strengthLowerDay">
-                <option value="Mon">Monday</option><option value="Tue">Tuesday</option><option value="Wed">Wednesday</option>
-                <option value="Thu">Thursday</option><option value="Fri">Friday</option><option value="Sat">Saturday</option><option value="Sun">Sunday</option>
-              </select>
-            </div>
-            <div class="field">
-              <label>Core</label>
-              <select id="strengthCoreDay">
-                <option value="Mon">Monday</option><option value="Tue">Tuesday</option><option value="Wed">Wednesday</option>
-                <option value="Thu">Thursday</option><option value="Fri">Friday</option><option value="Sat">Saturday</option><option value="Sun">Sunday</option>
-              </select>
-            </div>
-          </div>
-          <p class="note" style="margin-top:6px;">These are suggested days only, shown on Home and the week view &mdash; logging a session never depends on which day it actually happens. Pick three different days.</p>
+          <div class="field-row" id="strengthDayPickers" style="margin-top:8px;flex-wrap:wrap;"></div>
+          <p class="note" style="margin-top:6px;">These are suggested days only, shown on Home and the week view &mdash; logging a session never depends on which day it actually happens. Pick a different day for each one.</p>
         </div>
         <button class="feel-btn" id="confirmStrengthSetupBtn" style="color:var(--track);margin-top:14px;">Generate My Program</button>
       </div>
@@ -766,9 +759,9 @@
        are low-frequency utility actions rather than something checked daily like the other four. -->
   <div class="view" id="view-settings">
     <div class="card">
-      <h2>Sync</h2>
-      <p class="note" style="margin-top:0;">This device is synced under a passcode &mdash; enter the exact same one on any other device to see the same data there, automatically.</p>
-      <button class="feel-btn" id="changePasscodeBtn" style="padding:9px 18px;">Change sync passcode</button>
+      <h2>Account</h2>
+      <p class="note" style="margin-top:0;">This device is signed in under a passcode &mdash; enter the exact same one on any other device to see the same data there, automatically.</p>
+      <button class="feel-btn" id="changePasscodeBtn" style="padding:9px 18px;">Log Out</button>
     </div>
 
     <div class="card">
@@ -1666,10 +1659,12 @@ function initPasscodeGate(){
     setTimeout(()=> input.focus(), 50);
   });
 }
-// Lets someone switch to a different passcode later (e.g. typo'd it, or wants a fresh space)
-// without needing to dig into browser settings to clear storage themselves.
+// Lets someone log out and switch to a different passcode later (e.g. typo'd it, wants a
+// fresh/test space, or is handing the device to someone else) without needing to dig into
+// browser settings to clear storage themselves. Nothing under either passcode is deleted -
+// this only forgets which one THIS device currently points at.
 function changeSyncPasscode(){
-  if(!confirm('This switches to a different passcode on this device. You\u2019ll need to enter it (or a new one) again, and this device will then sync to whatever data lives under that passcode instead. Continue?')) return;
+  if(!confirm('This logs you out on this device. You\u2019ll need to enter a passcode again next time \u2014 your real one to come back to this data, or a new one for a fresh space. Nothing is deleted. Continue?')) return;
   localStorage.removeItem(PASSCODE_STORAGE_KEY);
   location.reload();
 }
@@ -1957,70 +1952,130 @@ function describeQualitySession(role, totalKm, zones, phase){
   return '';
 }
 
-// A categorized library the generator picks from, tagged by equipment tier, movement role
-// (compound/accessory/isolation, or just "core" for the Core category), and which body area
-// each exercise tends to aggravate if flagged - used to swap it out rather than exclude it
-// outright, so an injury flag still gets a full, appropriately-loaded session, not a gap.
-const STRENGTH_EXERCISE_LIBRARY = {
-  Upper: {
+// A categorized library the generator picks from, organized by movement pattern (Push, Pull,
+// Legs, Core) rather than by a fixed Upper/Lower/Core split - this is what lets several
+// different splits (see SPLIT_TEMPLATES below) share the same underlying exercise pool instead
+// of needing a separate library each. Tagged by equipment tier, movement role (compound /
+// accessory / isolation, or "main" for Core), and which body area each exercise tends to
+// aggravate if flagged - used to swap it out rather than exclude it outright, so an injury flag
+// still gets a full, appropriately-loaded session, not a gap.
+const STRENGTH_MUSCLE_LIBRARY = {
+  Push: { // chest, shoulders, triceps
     fullGym: {
       compound: [
         { name:'Barbell Bench Press', avoid:['shoulder','wrist'] },
-        { name:'Barbell Row', avoid:['lowerback'] },
+        { name:'Incline Barbell Bench Press', avoid:['shoulder','wrist'] },
+        { name:'Incline DB Bench Press', avoid:['shoulder','wrist'] },
         { name:'Overhead Press', avoid:['shoulder'] },
-        { name:'Weighted Pull-Up', avoid:['shoulder'] },
-        { name:'Seated Cable Row', avoid:[] },
-        { name:'Lat Pulldown', avoid:['shoulder'] },
+        { name:'Push Press', avoid:['shoulder','ankle'] },
+        { name:'Close-Grip Bench Press', avoid:['wrist','elbow'] },
+        { name:'Dips', avoid:['shoulder','elbow'] },
       ],
       isolation: [
-        { name:'Bicep Curls', avoid:['wrist'] },
-        { name:'Triceps Pushdown', avoid:['wrist'] },
+        { name:'Cable Chest Fly', avoid:['shoulder'] },
+        { name:'Cable Crossover', avoid:['shoulder'] },
+        { name:'Machine Chest Press', avoid:['shoulder'] },
         { name:'Lateral Raises', avoid:['shoulder'] },
-        { name:'Face Pulls', avoid:[] },
+        { name:'Triceps Pushdown', avoid:['wrist','elbow'] },
+        { name:'Overhead Triceps Extension', avoid:['elbow','shoulder'] },
       ],
     },
     limited: {
       compound: [
         { name:'Push-Ups', avoid:['wrist','shoulder'] },
-        { name:'DB Row', avoid:['lowerback'] },
+        { name:'Decline Push-Ups', avoid:['wrist','shoulder'] },
         { name:'DB Shoulder Press', avoid:['shoulder'] },
-        { name:'Inverted Row', avoid:[] },
-        { name:'Single-Arm DB Row', avoid:['lowerback'] },
+        { name:'DB Floor Press', avoid:['shoulder','wrist'] },
+        { name:'Pike Push-Ups', avoid:['shoulder','wrist'] },
+        { name:'Diamond Push-Ups', avoid:['wrist','elbow'] },
       ],
       isolation: [
-        { name:'DB Bicep Curls', avoid:['wrist'] },
-        { name:'DB Triceps Extension', avoid:['wrist','shoulder'] },
         { name:'DB Lateral Raise', avoid:['shoulder'] },
+        { name:'DB Triceps Extension', avoid:['wrist','elbow','shoulder'] },
+        { name:'Band Chest Press', avoid:['shoulder'] },
+        { name:'Band Triceps Pushdown', avoid:['elbow','wrist'] },
       ],
     },
   },
-  Lower: {
+  Pull: { // back, biceps
+    fullGym: {
+      compound: [
+        { name:'Barbell Row', avoid:['lowerback'] },
+        { name:'Pendlay Row', avoid:['lowerback'] },
+        { name:'Weighted Pull-Up', avoid:['shoulder','elbow'] },
+        { name:'Weighted Chin-Up', avoid:['shoulder','elbow'] },
+        { name:'Seated Cable Row', avoid:['wrist'] },
+        { name:'Lat Pulldown', avoid:['shoulder'] },
+        { name:'T-Bar Row', avoid:['lowerback'] },
+        { name:'Chest-Supported Row', avoid:[] },
+      ],
+      isolation: [
+        { name:'Bicep Curls', avoid:['wrist','elbow'] },
+        { name:'Hammer Curls', avoid:['wrist','elbow'] },
+        { name:'Preacher Curl', avoid:['elbow'] },
+        { name:'Face Pulls', avoid:['neck'] },
+        { name:'Rear Delt Fly', avoid:['shoulder'] },
+        { name:'Shrugs', avoid:['neck'] },
+      ],
+    },
+    limited: {
+      compound: [
+        { name:'DB Row', avoid:['lowerback'] },
+        { name:'Single-Arm DB Row', avoid:['lowerback'] },
+        { name:'Inverted Row', avoid:[] },
+        { name:'Resistance Band Row', avoid:['lowerback'] },
+        { name:'Towel Row (doorframe)', avoid:['lowerback'] },
+      ],
+      isolation: [
+        { name:'DB Bicep Curls', avoid:['wrist','elbow'] },
+        { name:'DB Hammer Curls', avoid:['wrist','elbow'] },
+        { name:'Band Face Pull', avoid:['neck'] },
+        { name:'Band Pull-Apart', avoid:['shoulder'] },
+        { name:'DB Rear Delt Fly', avoid:['shoulder'] },
+      ],
+    },
+  },
+  Legs: { // quads, hamstrings, glutes, calves
     fullGym: {
       compound: [
         { name:'Barbell Back Squat', avoid:['knee','lowerback'] },
+        { name:'Front Squat', avoid:['knee','wrist','lowerback'] },
         { name:'Romanian Deadlift', avoid:['lowerback'] },
-        { name:'Leg Press', avoid:[] },
-        { name:'Bulgarian Split Squat', avoid:['knee'] },
-        { name:'Goblet Squat', avoid:['knee'] },
+        { name:'Conventional Deadlift', avoid:['lowerback'] },
+        { name:'Trap Bar Deadlift', avoid:['lowerback'] },
+        { name:'Leg Press', avoid:['knee'] },
+        { name:'Hack Squat', avoid:['knee'] },
+        { name:'Bulgarian Split Squat', avoid:['knee','ankle','hip'] },
+        { name:'Walking Lunge', avoid:['knee','hip'] },
       ],
       accessory: [
-        { name:'Leg Curl', avoid:[] },
-        { name:'Hip Thrust', avoid:['lowerback'] },
-        { name:'Calf Raise', avoid:[] },
-        { name:'Single-Leg Romanian Deadlift', avoid:['lowerback'] },
+        { name:'Leg Curl', avoid:['knee'] },
+        { name:'Leg Extension', avoid:['knee'] },
+        { name:'Hip Thrust', avoid:['lowerback','hip'] },
+        { name:'Calf Raise', avoid:['ankle'] },
+        { name:'Seated Calf Raise', avoid:['ankle'] },
+        { name:'Single-Leg Romanian Deadlift', avoid:['lowerback','ankle'] },
+        { name:'Hip Abduction Machine', avoid:['hip'] },
+        { name:'Cable Kickback', avoid:['hip'] },
+        { name:'Nordic Curl', avoid:['knee'] },
       ],
     },
     limited: {
       compound: [
         { name:'Goblet Squat', avoid:['knee'] },
         { name:'DB Romanian Deadlift', avoid:['lowerback'] },
-        { name:'Reverse Lunge / Split Squat', avoid:['knee'] },
+        { name:'DB Deadlift', avoid:['lowerback'] },
+        { name:'Reverse Lunge / Split Squat', avoid:['knee','ankle'] },
+        { name:'DB Bulgarian Split Squat', avoid:['knee','ankle','hip'] },
+        { name:'Step-Ups', avoid:['knee','ankle','hip'] },
       ],
       accessory: [
-        { name:'Single-Leg Romanian Deadlift', avoid:['lowerback'] },
-        { name:'Hip Thrust / Glute Bridge', avoid:['lowerback'] },
-        { name:'Single-Leg Calf Raise', avoid:[] },
-        { name:'Lateral Band Walks', avoid:['knee'], weighted:false },
+        { name:'Single-Leg Romanian Deadlift', avoid:['lowerback','ankle'] },
+        { name:'Hip Thrust / Glute Bridge', avoid:['lowerback','hip'] },
+        { name:'Single-Leg Calf Raise', avoid:['ankle'] },
+        { name:'Standing DB Calf Raise', avoid:['ankle'] },
+        { name:'Lateral Band Walks', avoid:['knee','hip'], weighted:false },
+        { name:'Clamshells', avoid:['hip'], weighted:false },
       ],
     },
   },
@@ -2028,10 +2083,14 @@ const STRENGTH_EXERCISE_LIBRARY = {
     fullGym: {
       main: [
         { name:'Pallof Press', avoid:[] },
-        { name:'Hanging Leg Raise', avoid:['lowerback'], weighted:false },
+        { name:'Hanging Leg Raise', avoid:['lowerback','shoulder'], weighted:false },
         { name:'Plank', avoid:[], weighted:false },
-        { name:'Ab Wheel Rollout', avoid:['lowerback'], weighted:false },
+        { name:'Ab Wheel Rollout', avoid:['lowerback','shoulder'], weighted:false },
         { name:'Bird Dog', avoid:[], weighted:false },
+        { name:'Cable Woodchop', avoid:['lowerback'] },
+        { name:'Weighted Sit-Up', avoid:['neck','lowerback'] },
+        { name:'Side Plank', avoid:['shoulder'], weighted:false },
+        { name:'Russian Twist', avoid:['lowerback'] },
       ],
     },
     limited: {
@@ -2042,8 +2101,38 @@ const STRENGTH_EXERCISE_LIBRARY = {
         { name:'Side Plank with Reach-Through', avoid:['shoulder'], weighted:false },
         { name:'Pallof Press', avoid:[] },
         { name:'90/90 Hip Stretch', avoid:[], weighted:false },
+        { name:'Mountain Climbers', avoid:['wrist','shoulder'], weighted:false },
+        { name:'Bicycle Crunch', avoid:['neck'], weighted:false },
+        { name:'Superman', avoid:['lowerback'], weighted:false },
       ],
     },
+  },
+};
+
+// The available split styles. Each just names which sessions it needs (a session's "key" is
+// the category shown/logged under - repeating a key, as Full Body does, means that same
+// generated session gets scheduled on multiple days rather than needing separate variants).
+// Sourced from standard, well-established resistance training programming - nothing exotic.
+const SPLIT_TEMPLATES = {
+  upperLowerCore: {
+    label: 'Upper / Lower / Core',
+    blurb: 'The original default here \u2014 3 sessions/week covering everything. A solid, balanced choice if you don\u2019t have a strong reason to pick something else.',
+    sessions: [ { key:'Upper', label:'Upper day' }, { key:'Lower', label:'Lower day' }, { key:'Core', label:'Core day' } ],
+  },
+  pushPullLegs: {
+    label: 'Push / Pull / Legs',
+    blurb: 'Groups by movement pattern instead of body region \u2014 chest/shoulders/triceps, back/biceps, then legs. A common choice for hypertrophy since each muscle group gets more dedicated volume per session than a broader Upper day would give it.',
+    sessions: [ { key:'Push', label:'Push day' }, { key:'Pull', label:'Pull day' }, { key:'Legs', label:'Legs day' } ],
+  },
+  upperLower: {
+    label: 'Upper / Lower (2-day)',
+    blurb: 'The simplest option \u2014 two sessions covering everything. Good if dedicated Core work isn\u2019t a priority right now, or your week is genuinely tight for lifting time.',
+    sessions: [ { key:'Upper', label:'Upper day' }, { key:'Lower', label:'Lower day' } ],
+  },
+  fullBody: {
+    label: 'Full Body',
+    blurb: 'One well-rounded session (squat/hinge, push, pull, core) repeated across the week. Research generally favours training each muscle group about twice a week for strength/hypertrophy, and full body gets you there naturally even at just 2\u20133 sessions \u2014 often recommended for beginners or anyone training fewer than 3 days.',
+    sessions: [ { key:'Full Body', label:'Session 1' }, { key:'Full Body', label:'Session 2' }, { key:'Full Body', label:'Session 3' } ],
   },
 };
 
@@ -2064,6 +2153,10 @@ const STRENGTH_COUNT_BY_EXPERIENCE = {
   some:        { compound:3, accessory:2, isolation:2, main:4 },
   experienced: { compound:3, accessory:2, isolation:3, main:4 },
 };
+// Full Body sessions stay deliberately small (one exercise per movement pattern) since all
+// four patterns have to fit in a single session, unlike a whole session dedicated to one area -
+// experience only adds a couple of extra accessory exercises on top of the base four.
+const FULL_BODY_EXTRA_BY_EXPERIENCE = { new:0, some:1, experienced:2 };
 
 function pickExercisesAvoiding(list, count, injuryFlags){
   // Rank by how many flagged areas each exercise would aggravate (fewest first), rather than
@@ -2071,38 +2164,93 @@ function pickExercisesAvoiding(list, count, injuryFlags){
   // combination and nothing in a category is perfectly clean for all of them, this still
   // surfaces whichever options carry the FEWEST conflicts instead of silently disabling the
   // injury filter altogether - the bug the "everything flagged" stress test caught.
-  const ranked = list.slice().sort((a,b)=>{
-    const aConflicts = a.avoid.filter(x=>injuryFlags.includes(x)).length;
-    const bConflicts = b.avoid.filter(x=>injuryFlags.includes(x)).length;
-    return aConflicts - bConflicts;
+  // Within each conflict-count tier, order is shuffled (not just library order) so
+  // regenerating a program - or two people with the same profile - don't always get the exact
+  // same picks. The avoidance ranking itself is untouched by this; only ties get reordered.
+  const byConflictCount = new Map();
+  list.forEach(ex=>{
+    const n = ex.avoid.filter(x=>injuryFlags.includes(x)).length;
+    if(!byConflictCount.has(n)) byConflictCount.set(n, []);
+    byConflictCount.get(n).push(ex);
+  });
+  const ranked = [];
+  Array.from(byConflictCount.keys()).sort((a,b)=>a-b).forEach(n=>{
+    const tier = byConflictCount.get(n).slice();
+    for(let i = tier.length - 1; i > 0; i--){
+      const j = Math.floor(Math.random() * (i + 1));
+      [tier[i], tier[j]] = [tier[j], tier[i]];
+    }
+    ranked.push(...tier);
   });
   return ranked.slice(0, Math.min(count, ranked.length));
 }
 
-// Generates a full Upper/Lower/Core program from a real profile - equipment tier picks which
-// exercise pool to draw from, injury flags swap out anything that tends to aggravate that
-// area, experience level sets how many exercises per session, and goal sets the sets/reps.
+function buildStrengthRole(exList, roleKey, count, scheme, injuryFlags){
+  const picked = pickExercisesAvoiding(exList, count, injuryFlags);
+  const { sets, reps } = scheme[roleKey];
+  return picked.map(ex => ({ name: ex.name, sets, reps, weighted: ex.weighted !== false }));
+}
+
+// Builds one session's exercise list for a given category key. Upper/Lower pull from a merged
+// Push+Pull (Upper) or Legs (Lower) pool; Push/Pull/Legs/Core pull straight from their matching
+// muscle-library entry; Full Body draws one compound exercise from each pattern plus Core.
+function buildStrengthSession(categoryKey, equipment, scheme, counts, experienceLevel, injuryFlags){
+  const lib = STRENGTH_MUSCLE_LIBRARY;
+  if(categoryKey === 'Upper'){
+    const compoundLib = [...lib.Push[equipment].compound, ...lib.Pull[equipment].compound];
+    const isolationLib = [...lib.Push[equipment].isolation, ...lib.Pull[equipment].isolation];
+    return [...buildStrengthRole(compoundLib, 'compound', counts.compound, scheme, injuryFlags),
+            ...buildStrengthRole(isolationLib, 'isolation', counts.isolation, scheme, injuryFlags)];
+  }
+  if(categoryKey === 'Lower'){
+    return [...buildStrengthRole(lib.Legs[equipment].compound, 'compound', counts.compound, scheme, injuryFlags),
+            ...buildStrengthRole(lib.Legs[equipment].accessory, 'accessory', counts.accessory, scheme, injuryFlags)];
+  }
+  if(categoryKey === 'Core'){
+    return buildStrengthRole(lib.Core[equipment].main, 'main', counts.main, scheme, injuryFlags);
+  }
+  if(categoryKey === 'Push' || categoryKey === 'Pull'){
+    return [...buildStrengthRole(lib[categoryKey][equipment].compound, 'compound', counts.compound, scheme, injuryFlags),
+            ...buildStrengthRole(lib[categoryKey][equipment].isolation, 'isolation', counts.isolation, scheme, injuryFlags)];
+  }
+  if(categoryKey === 'Legs'){
+    return [...buildStrengthRole(lib.Legs[equipment].compound, 'compound', counts.compound, scheme, injuryFlags),
+            ...buildStrengthRole(lib.Legs[equipment].accessory, 'accessory', counts.accessory, scheme, injuryFlags)];
+  }
+  if(categoryKey === 'Full Body'){
+    const base = [
+      ...buildStrengthRole(lib.Legs[equipment].compound, 'compound', 1, scheme, injuryFlags),
+      ...buildStrengthRole(lib.Push[equipment].compound, 'compound', 1, scheme, injuryFlags),
+      ...buildStrengthRole(lib.Pull[equipment].compound, 'compound', 1, scheme, injuryFlags),
+      ...buildStrengthRole(lib.Core[equipment].main, 'main', 1, scheme, injuryFlags),
+    ];
+    const extra = FULL_BODY_EXTRA_BY_EXPERIENCE[experienceLevel] ?? 0;
+    if(extra >= 1) base.push(...buildStrengthRole(lib.Legs[equipment].accessory, 'accessory', 1, scheme, injuryFlags));
+    if(extra >= 2) base.push(...buildStrengthRole(lib.Push[equipment].isolation, 'isolation', 1, scheme, injuryFlags));
+    return base;
+  }
+  return [];
+}
+
+// Generates a full program from a real profile - split picks which sessions are needed,
+// equipment tier picks which exercise pool to draw from, injury flags swap out anything that
+// tends to aggravate that area, experience level sets how many exercises per session, and goal
+// sets the sets/reps.
 function generateStrengthProgram(profile){
   const equipment = (profile.equipment === 'limited') ? 'limited' : 'fullGym';
   const scheme = GOAL_REP_SCHEMES[profile.goal] || GOAL_REP_SCHEMES.general;
   const counts = STRENGTH_COUNT_BY_EXPERIENCE[profile.experienceLevel] || STRENGTH_COUNT_BY_EXPERIENCE.some;
   const injuryFlags = profile.injuryFlags || [];
+  const template = SPLIT_TEMPLATES[profile.split] || SPLIT_TEMPLATES.upperLowerCore;
 
-  function buildRole(exList, role, roleKey){
-    const picked = pickExercisesAvoiding(exList, counts[roleKey], injuryFlags);
-    const { sets, reps } = scheme[roleKey];
-    return picked.map(ex => ({ name: ex.name, sets, reps, weighted: ex.weighted !== false }));
-  }
-
-  const upperLib = STRENGTH_EXERCISE_LIBRARY.Upper[equipment];
-  const lowerLib = STRENGTH_EXERCISE_LIBRARY.Lower[equipment];
-  const coreLib = STRENGTH_EXERCISE_LIBRARY.Core[equipment];
-
-  return {
-    Upper: [...buildRole(upperLib.compound, 'compound', 'compound'), ...buildRole(upperLib.isolation, 'isolation', 'isolation')],
-    Lower: [...buildRole(lowerLib.compound, 'compound', 'compound'), ...buildRole(lowerLib.accessory, 'accessory', 'accessory')],
-    Core: buildRole(coreLib.main, 'main', 'main'),
-  };
+  const result = {};
+  // Dedupe repeated session keys (Full Body appears 3x in its template but only needs
+  // generating once - the same generated session gets scheduled on all 3 days).
+  const uniqueCategoryKeys = [...new Set(template.sessions.map(s=>s.key))];
+  uniqueCategoryKeys.forEach(key=>{
+    result[key] = buildStrengthSession(key, equipment, scheme, counts, profile.experienceLevel, injuryFlags);
+  });
+  return result;
 }
 
 // Checks a proposed strength schedule against the person's actual running plan: for each
@@ -2137,14 +2285,15 @@ const DEFAULT_STRENGTH_EXERCISES = {
 // "Edit Strength Exercises" panel on the Strength tab.
 let activeExercises = JSON.parse(JSON.stringify(DEFAULT_STRENGTH_EXERCISES));
 
-// Exercises with a fixed numeric rep scheme get an estimated 1RM instead of raw weight tracking.
-// Lower and Core are excluded on purpose - mostly unilateral/time-hold/bodyweight work without
-// a clean single rep count to convert, and several have no weight to track at all.
+// Exercises with a fixed numeric rep scheme get an estimated 1RM instead of raw weight
+// tracking. Generalized to scan every category rather than assuming "Upper" specifically -
+// what actually matters is whether an exercise is weighted with a clean numeric rep count to
+// convert, which the per-exercise `weighted` flag and `reps` type already capture directly.
 let EXERCISE_1RM_REPS = {};
 function recomputeExercise1RMReps(){
   EXERCISE_1RM_REPS = {};
-  activeExercises.Upper.forEach(ex=>{
-    if(typeof ex.reps === 'number') EXERCISE_1RM_REPS[ex.name] = ex.reps;
+  Object.values(activeExercises).flat().forEach(ex=>{
+    if(ex.weighted !== false && typeof ex.reps === 'number') EXERCISE_1RM_REPS[ex.name] = ex.reps;
   });
 }
 recomputeExercise1RMReps();
@@ -2153,7 +2302,10 @@ function estimate1RM(weight, reps){
   return weight * (1 + reps/30);
 }
 
-const STRENGTH_SESSIONS = ['Upper','Lower','Core'];
+// The session tabs/week view/history no longer assume Upper/Lower/Core specifically - whatever
+// categories the current split actually generated (see SPLIT_TEMPLATES) are read directly off
+// activeExercises, so Push/Pull/Legs, a 2-day Upper/Lower, or Full Body all work the same way.
+function getStrengthSessions(){ return Object.keys(activeExercises); }
 // Default suggested days if nobody's customized it - Mon/Wed/Fri, the original schedule this
 // app was built around. strengthScheduleGlobal is what actually gets read everywhere; this
 // constant is just its starting point (and what "Reset to defaults" restores).
@@ -2161,7 +2313,8 @@ const DEFAULT_STRENGTH_SCHEDULE = { Mon:'Upper', Wed:'Lower', Fri:'Core' };
 let strengthScheduleGlobal = JSON.parse(JSON.stringify(DEFAULT_STRENGTH_SCHEDULE));
 async function loadStrengthSchedule(){ try{ const r = await storageGetSafe('strength_schedule'); return r?JSON.parse(r.value):null; }catch(e){ return null; } }
 async function saveStrengthSchedule(sched){ await storageSetSafe('strength_schedule', JSON.stringify(sched)); }
-const SESSION_LOG_COLORS = { Upper:'#E07A4A', Lower:'#C9633F', Core:'#6EA88C' };
+const SESSION_LOG_COLORS = { Upper:'#E07A4A', Lower:'#C9633F', Core:'#6EA88C', Push:'#C9633F', Pull:'#6E8AA8', Legs:'#E07A4A', 'Full Body':'#6EA88C' };
+const SESSION_LOG_FALLBACK_COLOR = '#8899AA';
 
 let strengthSessionCompletion = {};
 async function loadStrengthSessionCompletion(){ try{ const r = await storageGetSafe('strength_session_completion'); return r?JSON.parse(r.value):{}; }catch(e){ return {}; } }
@@ -2189,8 +2342,9 @@ async function toggleStrengthDone(dateStr, session, checked){
 }
 function initStrengthSessionLogger(){
   const tabsEl = document.getElementById('strengthSessionTabs');
-  let currentSession = STRENGTH_SESSIONS[0];
-  tabsEl.innerHTML = STRENGTH_SESSIONS.map((s,i)=>`<span class="strength-session-tab ${i===0?'active':''}" data-session="${s}">${s}</span>`).join('');
+  const sessionNames = getStrengthSessions();
+  let currentSession = sessionNames[0];
+  tabsEl.innerHTML = sessionNames.map((s,i)=>`<span class="strength-session-tab ${i===0?'active':''}" data-session="${s}">${s}</span>`).join('');
 
   function renderStrengthWeekSummary(){
     const container = document.getElementById('strengthWeekBody');
@@ -2201,11 +2355,15 @@ function initStrengthSessionLogger(){
     const mondayStr = toLocalISO(monday);
     const dayIndexByName = {Mon:0,Tue:1,Wed:2,Thu:3,Fri:4,Sat:5,Sun:6};
 
-    container.innerHTML = STRENGTH_SESSIONS.map(session=>{
-      const scheduledDay = Object.keys(strengthScheduleGlobal).find(d=>strengthScheduleGlobal[d]===session);
+    // Iterate by scheduled DAY, not by unique category - a split like Full Body schedules the
+    // same category on 3 different days, and each of those needs its own row/checkbox. Sorted
+    // into calendar order (Mon first) so the list reads like an actual week, not insertion order.
+    const scheduledDays = Object.keys(strengthScheduleGlobal).slice().sort((a,b)=>dayIndexByName[a]-dayIndexByName[b]);
+    container.innerHTML = scheduledDays.map(scheduledDay=>{
+      const session = strengthScheduleGlobal[scheduledDay];
       const dateStr = addDays(mondayStr, dayIndexByName[scheduledDay]);
       const isDone = isStrengthDone(dateStr, session);
-      const color = SESSION_LOG_COLORS[session];
+      const color = SESSION_LOG_COLORS[session] || SESSION_LOG_FALLBACK_COLOR;
       return `<div class="habit-item ${isDone?'habit-done':''}">
         <input type="checkbox" class="strength-week-check" data-date="${dateStr}" data-session="${session}" ${isDone?'checked':''}>
         <span class="habit-label"><span style="color:${color};font-weight:600;">${session}</span> \u2014 ${scheduledDay}</span>
@@ -2231,12 +2389,12 @@ function initStrengthSessionLogger(){
     for(let i=13;i>=0;i--){ const dt=new Date(today); dt.setDate(today.getDate()-i); days.push(dt); }
     container.innerHTML = days.map(dt=>{
       const dateStr = toLocalISO(dt);
-      const trained = STRENGTH_SESSIONS.filter(s => dateHasSession(dateStr, s));
+      const trained = sessionNames.filter(s => dateHasSession(dateStr, s));
       const label = dt.toLocaleDateString('en-GB',{weekday:'short'})[0];
       const isToday = dateStr === toLocalISO(today);
       let bg = 'var(--surface-2)', color = 'var(--text-dim)', display = '';
       if(trained.length){
-        bg = SESSION_LOG_COLORS[trained[0]];
+        bg = SESSION_LOG_COLORS[trained[0]] || SESSION_LOG_FALLBACK_COLOR;
         color = '#0D0F12';
         display = trained.map(s=>s[0]).join('/');
       }
@@ -2326,7 +2484,7 @@ function initStrengthSessionLogger(){
   function refreshLiftHistorySelect(){
     const select = document.getElementById('liftHistorySelect');
     if(!select) return;
-    const allExercises = [...activeExercises.Upper, ...activeExercises.Lower, ...activeExercises.Core];
+    const allExercises = Object.values(activeExercises).flat();
     const withData = allExercises.filter(ex=>{
       const hist = strengthLogGlobal[ex.name] || {};
       return Object.values(hist).some(entry => getEntrySets(entry).length > 0);
@@ -2430,6 +2588,42 @@ function initStrengthSessionLogger(){
   };
 }
 
+// Default suggested days for however many sessions a split needs, spread out rather than
+// clustered - used only when there's no existing schedule to prefill from.
+function defaultDayForIndex(i){
+  const pool = ['Mon','Wed','Fri','Tue','Thu','Sat','Sun'];
+  return pool[i % pool.length];
+}
+
+// Renders one <select> per session in the chosen split, pre-filled from the existing schedule
+// where possible (matched by category, in day-of-week order) so switching back to a split you
+// already had doesn't lose your chosen days. Each select carries the session's category key in
+// a data attribute so the confirm handler can read them back out generically.
+function renderStrengthDayPickers(splitKey, prefillSchedule){
+  const template = SPLIT_TEMPLATES[splitKey] || SPLIT_TEMPLATES.upperLowerCore;
+  const container = document.getElementById('strengthDayPickers');
+  const dayOptions = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const dayIndexByName = {Mon:0,Tue:1,Wed:2,Thu:3,Fri:4,Sat:5,Sun:6};
+
+  const existingByCategory = {};
+  Object.keys(prefillSchedule || {}).sort((a,b)=>dayIndexByName[a]-dayIndexByName[b]).forEach(day=>{
+    const cat = prefillSchedule[day];
+    if(!existingByCategory[cat]) existingByCategory[cat] = [];
+    existingByCategory[cat].push(day);
+  });
+
+  container.innerHTML = template.sessions.map((session, i)=>{
+    const pool = existingByCategory[session.key] || [];
+    const prefill = pool.length ? pool.shift() : defaultDayForIndex(i);
+    return `<div class="field">
+      <label>${session.label}</label>
+      <select class="strength-day-picker" data-session-key="${session.key}">
+        ${dayOptions.map(d=>`<option value="${d}" ${d===prefill?'selected':''}>${d}</option>`).join('')}
+      </select>
+    </div>`;
+  }).join('');
+}
+
 async function initExerciseEditor(){
   // Explicit flag, same pattern as the Running tab's onboarding fix - not an inferred guess.
   // A brand new passcode with no saved strength_profile sees ONLY the setup card, never the
@@ -2441,6 +2635,14 @@ async function initExerciseEditor(){
   document.getElementById('strengthEditCard').style.display = hasStrengthSetup ? 'block' : 'none';
   document.getElementById('strengthWeekCard').style.display = hasStrengthSetup ? 'block' : 'none';
   document.getElementById('strengthLogCard').style.display = hasStrengthSetup ? 'block' : 'none';
+  // Same pattern as the Running tab: once real setup has actually happened, this card stops
+  // presenting itself as first-time setup - heading, note, and button all switch to "redo"
+  // framing. Explicit flag (hasStrengthSetup), never inferred.
+  const strengthSetupDefaultLabel = hasStrengthSetup ? 'Redo My Program' : 'Set Up My Program';
+  document.getElementById('strengthSetupHeading').textContent = hasStrengthSetup ? 'Strength Program' : 'Set Up Your Strength Program';
+  document.getElementById('strengthSetupIntro').textContent = hasStrengthSetup
+    ? 'Your program is set up below. Want to change your split, goal, equipment, injuries, or training days? Answer the questions again here to regenerate it \u2014 replaces your current exercise list; logged weight history stays saved under each exercise\u2019s name either way.'
+    : 'Answer a few questions and a program gets generated across whichever split you pick below \u2014 picks appropriate exercises and set/rep ranges for your goal, equipment, and anything you\u2019re managing. Replaces your current exercise list below; your logged weight history stays saved under each exercise\u2019s name either way.';
 
   const toggleBtn = document.getElementById('toggleExerciseEditor');
   const body = document.getElementById('exerciseEditorBody');
@@ -2465,36 +2667,47 @@ async function initExerciseEditor(){
     if(window._replanStrength) window._replanStrength();
   });
 
+  const splitSelect = document.getElementById('strengthSplit');
+  const splitBlurb = document.getElementById('strengthSplitBlurb');
+  function updateSplitBlurb(){
+    const t = SPLIT_TEMPLATES[splitSelect.value] || SPLIT_TEMPLATES.upperLowerCore;
+    splitBlurb.textContent = t.blurb;
+  }
+  splitSelect.addEventListener('change', ()=>{
+    updateSplitBlurb();
+    renderStrengthDayPickers(splitSelect.value, strengthScheduleGlobal);
+  });
+
   const setupToggle = document.getElementById('strengthSetupBtn');
   const setupForm = document.getElementById('strengthSetupForm');
+  setupToggle.textContent = strengthSetupDefaultLabel;
   setupToggle.addEventListener('click', ()=>{
     const showing = setupForm.style.display === 'block';
     setupForm.style.display = showing ? 'none' : 'block';
-    setupToggle.textContent = showing ? 'Set Up My Program' : 'Cancel';
+    setupToggle.textContent = showing ? strengthSetupDefaultLabel : 'Cancel';
     if(!showing){
-      const currentUpperDay = Object.keys(strengthScheduleGlobal).find(d=>strengthScheduleGlobal[d]==='Upper') || 'Mon';
-      const currentLowerDay = Object.keys(strengthScheduleGlobal).find(d=>strengthScheduleGlobal[d]==='Lower') || 'Wed';
-      const currentCoreDay = Object.keys(strengthScheduleGlobal).find(d=>strengthScheduleGlobal[d]==='Core') || 'Fri';
-      document.getElementById('strengthUpperDay').value = currentUpperDay;
-      document.getElementById('strengthLowerDay').value = currentLowerDay;
-      document.getElementById('strengthCoreDay').value = currentCoreDay;
+      // Default the split selector to whatever's currently active, so redoing setup starts
+      // from where someone already is rather than silently resetting to Upper/Lower/Core.
+      splitSelect.value = (strengthProfileGlobal && SPLIT_TEMPLATES[strengthProfileGlobal.split]) ? strengthProfileGlobal.split : 'upperLowerCore';
+      updateSplitBlurb();
+      renderStrengthDayPickers(splitSelect.value, strengthScheduleGlobal);
     }
   });
   document.getElementById('confirmStrengthSetupBtn').addEventListener('click', async ()=>{
+    const splitKey = splitSelect.value;
     const goal = document.getElementById('strengthGoal').value;
     const experienceLevel = document.getElementById('strengthExperience').value;
     const equipment = document.getElementById('strengthEquipment').value;
     const injuryFlags = Array.from(document.querySelectorAll('#strengthInjuries input:checked')).map(el=>el.value);
-    const upperDay = document.getElementById('strengthUpperDay').value;
-    const lowerDay = document.getElementById('strengthLowerDay').value;
-    const coreDay = document.getElementById('strengthCoreDay').value;
-    const chosenDays = [upperDay, lowerDay, coreDay];
-    if(new Set(chosenDays).size !== 3){
-      alert('Pick three different days \u2014 Upper, Lower, and Core each need their own day.');
+
+    const dayPickers = Array.from(document.querySelectorAll('#strengthDayPickers .strength-day-picker'));
+    const chosenDays = dayPickers.map(sel=>sel.value);
+    if(new Set(chosenDays).size !== dayPickers.length){
+      alert('Pick a different day for each session \u2014 no two sessions can share the same day.');
       return;
     }
-
-    const newSchedule = { [upperDay]:'Upper', [lowerDay]:'Lower', [coreDay]:'Core' };
+    const newSchedule = {};
+    dayPickers.forEach(sel=>{ newSchedule[sel.value] = sel.dataset.sessionKey; });
 
     // Soft warning, not a rule: check the chosen days against the person's actual running
     // plan for hard-session stacking before asking them to confirm anything.
@@ -2512,7 +2725,7 @@ async function initExerciseEditor(){
 
     if(!confirm('This replaces your current exercise list with a generated program based on your answers, and updates your suggested training days. Weight history for each exercise stays saved under its name either way \u2014 if an exercise isn\u2019t in the new program, its history just won\u2019t show, it isn\u2019t deleted. Continue?')) return;
 
-    const profile = { goal, experienceLevel, equipment, injuryFlags, upperDay, lowerDay, coreDay };
+    const profile = { split: splitKey, goal, experienceLevel, equipment, injuryFlags };
     const newExercises = generateStrengthProgram(profile);
 
     await saveCustomExercises(newExercises);
@@ -2537,9 +2750,28 @@ async function persistExerciseChange(){
   if(window._replanStrength) window._replanStrength();
 }
 
+// A flat, deduped, alphabetically sorted list of every exercise name in the muscle library
+// (both equipment tiers, every category) - used by the "swap" dropdown in the exercise editor
+// so someone can browse real alternatives instead of only free-typing a name. Computed once
+// since the library itself is static data. Also tracks each name's `weighted` flag so swapping
+// updates that too, not just the name.
+const LIBRARY_EXERCISE_LOOKUP = (function(){
+  const map = new Map();
+  Object.values(STRENGTH_MUSCLE_LIBRARY).forEach(byEquipment=>{
+    Object.values(byEquipment).forEach(byRole=>{
+      Object.values(byRole).forEach(list=>{
+        list.forEach(ex=>{ if(!map.has(ex.name)) map.set(ex.name, ex.weighted !== false); });
+      });
+    });
+  });
+  return map;
+})();
+const ALL_LIBRARY_EXERCISE_NAMES = Array.from(LIBRARY_EXERCISE_LOOKUP.keys()).sort();
+
 function renderExerciseEditor(){
   const container = document.getElementById('exerciseEditorCategories');
   const categories = Object.keys(activeExercises);
+  const swapOptions = `<option value="">Swap for\u2026</option>` + ALL_LIBRARY_EXERCISE_NAMES.map(n=>`<option value="${n.replace(/"/g,'&quot;')}">${n}</option>`).join('');
   container.innerHTML = categories.map(cat => `
     <div class="ex-editor-cat" data-cat="${cat}">
       <h3>${cat}</h3>
@@ -2550,6 +2782,7 @@ function renderExerciseEditor(){
             <input type="number" class="ex-sets" value="${ex.sets}" min="1" max="10" data-field="sets">
             <input type="text" class="ex-reps" value="${String(ex.reps).replace(/"/g,'&quot;')}" placeholder="e.g. 8 or 10 each leg" data-field="reps">
             <label class="ex-weighted-lbl"><input type="checkbox" data-field="weighted" ${ex.weighted!==false?'checked':''}> weighted</label>
+            <select class="ex-swap" data-cat="${cat}" data-idx="${idx}" title="Swap for an alternative from the library">${swapOptions}</select>
             <button class="ex-remove-btn" data-cat="${cat}" data-idx="${idx}" title="Remove exercise">&times;</button>
           </div>
         `).join('')}
@@ -2588,6 +2821,20 @@ function renderExerciseEditor(){
           return;
         }
       });
+    });
+  });
+
+  container.querySelectorAll('.ex-swap').forEach(sel=>{
+    sel.addEventListener('change', async (e)=>{
+      const name = e.target.value;
+      if(!name) return;
+      const cat = e.target.dataset.cat, idx = Number(e.target.dataset.idx);
+      activeExercises[cat][idx].name = name;
+      if(LIBRARY_EXERCISE_LOOKUP.has(name)) activeExercises[cat][idx].weighted = LIBRARY_EXERCISE_LOOKUP.get(name);
+      // Sets/reps stay as they were (already tuned to goal/experience) - only name and
+      // weighted come from the swap, everything else is still the user's to adjust.
+      await persistExerciseChange();
+      renderExerciseEditor();
     });
   });
 
@@ -2837,7 +3084,7 @@ async function initPlan(){
       }
       if(strengthType){
         const isDone = isStrengthDone(dkey, strengthType);
-        const color = SESSION_LOG_COLORS[strengthType];
+        const color = SESSION_LOG_COLORS[strengthType] || SESSION_LOG_FALLBACK_COLOR;
         lines += `<label class="week-session-line"><input type="checkbox" class="wk-strength-check" data-date="${dkey}" data-session="${strengthType}" ${isDone?'checked':''}><span style="color:${color};">${strengthType} (strength)</span></label>`;
       }
       if(!runSession && !strengthType) lines = `<div class="cal-plan-role" style="color:var(--text-dim);">Rest</div>`;
