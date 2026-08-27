@@ -3,18 +3,26 @@
 // dashboard, handled by the strava-oauth-callback Edge Function), refreshes each person's
 // access token, pulls their recent activities, and writes the result back under their own
 // passcode. One run covers everyone connected - no per-person secrets needed here anymore.
+//
+// SECURITY FIX: this now uses SUPABASE_SERVICE_ROLE_KEY instead of SUPABASE_ANON_KEY. Once
+// kv_store's RLS is locked down (see lockdown-kv-store.sql), the anon key can no longer read
+// across every passcode's strava_auth rows the way this script needs to - only the service
+// role key (which bypasses RLS) can. The service role key must NEVER be hardcoded in this
+// file or the workflow YAML - it belongs only in a GitHub Actions secret (see the updated
+// strava-sync-workflow.yml, which now references secrets.SUPABASE_SERVICE_ROLE_KEY instead of
+// a literal key value).
 
 const STRAVA_CLIENT_ID = process.env.STRAVA_CLIENT_ID;
 const STRAVA_CLIENT_SECRET = process.env.STRAVA_CLIENT_SECRET;
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 function assertEnv(name, val){
   if(!val){ console.error(`Missing required secret/env var: ${name}`); process.exit(1); }
 }
 [
   ['STRAVA_CLIENT_ID', STRAVA_CLIENT_ID], ['STRAVA_CLIENT_SECRET', STRAVA_CLIENT_SECRET],
-  ['SUPABASE_URL', SUPABASE_URL], ['SUPABASE_ANON_KEY', SUPABASE_ANON_KEY],
+  ['SUPABASE_URL', SUPABASE_URL], ['SUPABASE_SERVICE_ROLE_KEY', SUPABASE_SERVICE_ROLE_KEY],
 ].forEach(([name, val]) => assertEnv(name, val));
 
 function toLocalISO(d){
@@ -36,7 +44,7 @@ function fmtPace(secPerKm){
 async function fetchConnectedUsers(){
   const res = await fetch(
     `${SUPABASE_URL}/rest/v1/kv_store?key=eq.strava_auth&select=passcode,value`,
-    { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } }
+    { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
   );
   if(!res.ok) throw new Error(`Fetching connected users failed: ${res.status} ${await res.text()}`);
   return await res.json(); // [{passcode, value: '{"refresh_token":...}'}]
@@ -127,8 +135,8 @@ async function writeSnapshot(passcode, weeklyData, thisWeekActivities){
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'apikey': SUPABASE_ANON_KEY,
-      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'apikey': SUPABASE_SERVICE_ROLE_KEY,
+      'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
       'Prefer': 'resolution=merge-duplicates',
     },
     body: JSON.stringify({ passcode, key: 'strava_snapshot', value, updated_at: new Date().toISOString() }),
