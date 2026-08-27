@@ -1713,7 +1713,7 @@ const STRAVA_OAUTH_CALLBACK_URL = 'https://mefuldlvyaorzulrnnyx.supabase.co/func
 // send-push-notification.ts for how to generate one), and the PUBLIC half pasted below - the
 // public key is safe to expose, only the private half (kept in the Edge Function) is secret.
 const PUSH_NOTIFY_URL = 'https://mefuldlvyaorzulrnnyx.supabase.co/functions/v1/send-push-notification';
-const PUSH_VAPID_PUBLIC_KEY = ''; // paste your generated VAPID public key here
+const PUSH_VAPID_PUBLIC_KEY = 'BHagetxRBAcMVWkXM5Waitm1M0s-cO-bQNLEUZ0d-IijNxJ9BMI7JwSVr1PF7DiwvgtHocEWPWL8cR00DWKCDgk'; // paste your generated VAPID public key here
 
 function connectStrava(){
   const redirectUri = encodeURIComponent(STRAVA_OAUTH_CALLBACK_URL);
