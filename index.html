@@ -1713,7 +1713,7 @@ const STRAVA_OAUTH_CALLBACK_URL = 'https://mefuldlvyaorzulrnnyx.supabase.co/func
 // send-push-notification.ts for how to generate one), and the PUBLIC half pasted below - the
 // public key is safe to expose, only the private half (kept in the Edge Function) is secret.
 const PUSH_NOTIFY_URL = 'https://mefuldlvyaorzulrnnyx.supabase.co/functions/v1/send-push-notification';
-const PUSH_VAPID_PUBLIC_KEY = 'BHagetxRBAcMVWkXM5Waitm1M0s-cO-bQNLEUZ0d-IijNxJ9BMI7JwSVr1PF7DiwvgtHocEWPWL8cR00DWKCDgk'; // paste your generated VAPID public key here
+const PUSH_VAPID_PUBLIC_KEY = ''; // paste your generated VAPID public key here
 
 function connectStrava(){
   const redirectUri = encodeURIComponent(STRAVA_OAUTH_CALLBACK_URL);
@@ -1772,9 +1772,14 @@ function storageAvailable(){ return !!supabaseClient && !!ACTIVE_PASSCODE; }
 async function passcodeHasExistingData(passcode){
   if(!supabaseClient || !SUPABASE_URL.startsWith('http')) return true; // can't check yet - don't block on it
   try{
-    const { data, error } = await supabaseClient.from('kv_store').select('key').eq('passcode', passcode).limit(1);
-    if(error) return true; // fail open - a check failure shouldn't block getting in
-    return !!(data && data.length > 0);
+    const res = await fetch(KV_STORE_PROXY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'exists', passcode }),
+    });
+    const result = await res.json();
+    if(!res.ok || result.error) return true; // fail open - a check failure shouldn't block getting in
+    return !!result.exists;
   }catch(e){ return true; }
 }
 function initPasscodeGate(){
@@ -1865,11 +1870,8 @@ function retryPendingSave(key, attemptsLeft){
     // otherwise land at the exact moment a newly-queued operation is also running.
     const ok = await runQueued(async () => {
       try{
-        const { error } = await supabaseClient.from('kv_store').upsert(
-          { passcode: ACTIVE_PASSCODE, key, value, updated_at: new Date().toISOString() },
-          { onConflict: 'passcode,key' }
-        );
-        return !error;
+        await kvProxyCall('set', key, value);
+        return true;
       }catch(e){ return false; }
     });
     if(ok){
@@ -1891,6 +1893,24 @@ function runQueued(taskFn){
   return scheduled;
 }
 
+// The browser no longer talks to kv_store directly for real passcode data - it goes through
+// this Edge Function instead, which uses the service role key server-side (never exposed to a
+// browser) and is the only thing that can still read/write arbitrary passcodes now that
+// kv_store's RLS has been locked down to the anon key. See lockdown-kv-store.sql for the
+// database side of this fix. Training Pulse (the one reserved shared passcode) deliberately
+// stays OFF this proxy and on the direct anon-key path - see pulseSharedSet/GetAll/Delete below.
+const KV_STORE_PROXY_URL = 'https://mefuldlvyaorzulrnnyx.supabase.co/functions/v1/kv-store-proxy';
+async function kvProxyCall(action, key, value){
+  const res = await fetch(KV_STORE_PROXY_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, passcode: ACTIVE_PASSCODE, key, value }),
+  });
+  const result = await res.json();
+  if(!res.ok || result.error) throw new Error(result.error || `HTTP ${res.status}`);
+  return result;
+}
+
 async function storageSetSafe(key, value){
   return runQueued(async () => {
     if(!storageAvailable()){
@@ -1904,11 +1924,7 @@ async function storageSetSafe(key, value){
     const delays = [500, 1200, 2500]; // three retries with increasing backoff
     for(let attempt=0; attempt<=delays.length; attempt++){
       try{
-        const { error } = await supabaseClient.from('kv_store').upsert(
-          { passcode: ACTIVE_PASSCODE, key, value, updated_at: new Date().toISOString() },
-          { onConflict: 'passcode,key' }
-        );
-        if(error) throw error;
+        await kvProxyCall('set', key, value);
         if(__pendingSaveKeys.get(key) === value) __pendingSaveKeys.delete(key);
         updatePendingIndicator();
         return true;
@@ -1934,12 +1950,10 @@ async function storageGetSafe(key){
   // artificial delay before any actual network time. Reads can safely run concurrently.
   if(!storageAvailable()) return null;
   try{
-    // maybeSingle() returns {data:null} for a key that doesn't exist yet, rather than
-    // throwing - that's the normal, expected case for anything not touched yet.
-    const { data, error } = await supabaseClient.from('kv_store').select('value')
-      .eq('passcode', ACTIVE_PASSCODE).eq('key', key).maybeSingle();
-    if(error) throw error;
-    return data ? { value: data.value } : null;
+    // The proxy returns {value: null} for a key that doesn't exist yet, rather than an error -
+    // that's the normal, expected case for anything not touched yet.
+    const result = await kvProxyCall('get', key);
+    return result.value !== null && result.value !== undefined ? { value: result.value } : null;
   }catch(e){
     console.warn('Storage read failed:', key, e);
     return null;
@@ -1950,9 +1964,7 @@ async function storageDeleteSafe(key){
   return runQueued(async () => {
     if(!storageAvailable()) return true;
     try{
-      const { error } = await supabaseClient.from('kv_store').delete()
-        .eq('passcode', ACTIVE_PASSCODE).eq('key', key);
-      if(error) throw error;
+      await kvProxyCall('delete', key);
       return true;
     }catch(e){
       console.warn('Storage delete failed:', key, e);
