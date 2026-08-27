@@ -218,6 +218,7 @@
   .arc-stat .v{font-family:'IBM Plex Mono',monospace;font-size:26px;font-weight:300;color:#fff;}
   .arc-stat .k{font-size:9px;color:var(--text-dim);letter-spacing:0.14em;text-transform:uppercase;margin-top:4px;}
   .habit-item{display:flex;align-items:center;gap:13px;padding:11px 4px;border-bottom:1px solid rgba(255,255,255,0.06);cursor:pointer;user-select:none;}
+  .pulse-banner{font-size:12px;color:var(--text-dim);background:rgba(224,122,74,0.08);border:1px solid rgba(224,122,74,0.2);border-radius:8px;padding:9px 12px;margin-bottom:10px;line-height:1.5;}
   .habit-item:last-child{border-bottom:none;}
   .habit-item .habit-label{font-size:14px;font-weight:300;color:#fff;transition:color .15s;}
   .habit-item.habit-done .habit-label{color:var(--text-dim);text-decoration:line-through;text-decoration-color:rgba(163,163,163,0.5);}
@@ -353,6 +354,7 @@
       </div>
       <textarea id="painNote" rows="2" placeholder="Optional note (e.g. tight after the long run, felt fine all day)"></textarea>
       <p class="note" style="margin-top:8px;">1 = feels great, 5 = concerning. Worth logging even on rest days &mdash; a rating that creeps up over a few days is the useful signal, not any single number. Trends live on the Habits tab.</p>
+      <button class="feel-btn" id="dismissBodyCheckBtn" style="margin-top:10px;padding:7px 14px;font-size:11px;">Hide Body Check &mdash; injuries have subsided</button>
     </div>
 
     <div class="card">
@@ -758,9 +760,15 @@
       <button class="feel-btn" id="changePasscodeBtn" style="padding:9px 18px;">Log Out</button>
     </div>
 
+    <div class="card" id="bodyCheckSettingsCard" style="display:none;">
+      <h2>Body Check</h2>
+      <p class="note" style="margin-top:0;" id="bodyCheckSettingsNote"></p>
+      <button class="feel-btn" id="toggleBodyCheckBtn" style="margin-top:10px;"></button>
+    </div>
+
     <div class="card">
       <h2>Training Pulse</h2>
-      <p class="note" style="margin-top:0;">Opt in to show a display name and a simple yes/no &ldquo;trained this week&rdquo; to anyone else using this dashboard, and see the same for them on Home. Nothing else about your data is shared &mdash; no plan, no logs, no numbers, and your passcode itself is never visible to anyone.</p>
+      <p class="note" style="margin-top:0;">Opt in to show a display name, a weekly points score, and your streak to anyone else using this dashboard, and see the same for them on Home. Points come only from session counts (did you run, did you lift, was it a long run) &mdash; never distances, weights, or your actual plan/logs, and your passcode itself is never visible to anyone.</p>
       <div class="field" style="margin-top:10px;">
         <label><input type="checkbox" id="pulseEnabledToggle"> Show me on Training Pulse</label>
       </div>
@@ -1212,23 +1220,30 @@ const DAILY_QUOTES = [
   { text:"Make the best use of what is in your power, and take the rest as it happens.", author:"Epictetus" },
   { text:"It is impossible for a man to learn what he thinks he already knows.", author:"Epictetus" },
   { text:"Don't explain your philosophy. Embody it.", author:"Epictetus" },
-  { text:"Whatever you are, be a good one.", author:"Abraham Lincoln" },
-  { text:"I am a slow walker, but I never walk back.", author:"Abraham Lincoln" },
-  { text:"Always bear in mind that your own resolution to succeed is more important than any other one thing.", author:"Abraham Lincoln" },
-  { text:"Character is like a tree and reputation like its shadow. The shadow is what we think of it; the tree is the real thing.", author:"Abraham Lincoln" },
-  { text:"It is hard to fail, but it is worse never to have tried to succeed.", author:"Theodore Roosevelt" },
-  { text:"Do what you can, with what you have, where you are.", author:"Theodore Roosevelt" },
-  { text:"Far and away the best prize that life offers is the chance to work hard at work worth doing.", author:"Theodore Roosevelt" },
-  { text:"Nothing in the world is worth having or worth doing unless it means effort, pain, difficulty.", author:"Theodore Roosevelt" },
-  { text:"What lies behind us and what lies before us are tiny matters compared to what lies within us.", author:"Ralph Waldo Emerson" },
-  { text:"Do not go where the path may lead, go instead where there is no path and leave a trail.", author:"Ralph Waldo Emerson" },
-  { text:"The only person you are destined to become is the person you decide to be.", author:"Ralph Waldo Emerson" },
-  { text:"Nothing great was ever achieved without enthusiasm.", author:"Ralph Waldo Emerson" },
-  { text:"For every minute you remain angry, you give up sixty seconds of peace of mind.", author:"Ralph Waldo Emerson" },
-  { text:"Go confidently in the direction of your dreams. Live the life you have imagined.", author:"Henry David Thoreau" },
-  { text:"It's not what you look at that matters, it's what you see.", author:"Henry David Thoreau" },
-  { text:"Things do not change; we change.", author:"Henry David Thoreau" },
-  { text:"You must live in the present, launch yourself on every wave, find your eternity in each moment.", author:"Henry David Thoreau" },
+  { text:"Adapt yourself to the environment in which your lot has been cast.", author:"Marcus Aurelius" },
+  { text:"The soul becomes dyed with the color of its thoughts.", author:"Marcus Aurelius" },
+  { text:"How much trouble he avoids who does not look to see what his neighbor says or does.", author:"Marcus Aurelius" },
+  { text:"Think of yourself as dead. You have lived your life. Now take what's left and live it properly.", author:"Marcus Aurelius" },
+  { text:"You could leave life right now. Let that determine what you do and say and think.", author:"Marcus Aurelius" },
+  { text:"Be tolerant with others and strict with yourself.", author:"Marcus Aurelius" },
+  { text:"Receive without pride, let go without attachment.", author:"Marcus Aurelius" },
+  { text:"A man's worth is no greater than the worth of his ambitions.", author:"Marcus Aurelius" },
+  { text:"He suffers more than necessary, who suffers before it is necessary.", author:"Seneca" },
+  { text:"True happiness is to enjoy the present, without anxious dependence upon the future.", author:"Seneca" },
+  { text:"No man was ever wise by chance.", author:"Seneca" },
+  { text:"Associate with people who are likely to improve you.", author:"Seneca" },
+  { text:"It is the power of the mind to be unconquerable.", author:"Seneca" },
+  { text:"We should every night ask ourselves: what infirmity have I mastered today?", author:"Seneca" },
+  { text:"As long as you live, keep learning how to live.", author:"Seneca" },
+  { text:"There is no easy way from the earth to the stars.", author:"Seneca" },
+  { text:"Freedom is the only worthy goal in life, and it is won by disregarding things that lie beyond our control.", author:"Epictetus" },
+  { text:"Any person capable of angering you becomes your master.", author:"Epictetus" },
+  { text:"Seek not that the things which happen should happen as you wish; but wish the things which happen to be as they are, and you will have a tranquil flow of life.", author:"Epictetus" },
+  { text:"If you want to improve, be content to be thought foolish and stupid.", author:"Epictetus" },
+  { text:"Keep silence for the most part, and speak only when necessary.", author:"Epictetus" },
+  { text:"Neither should a ship rely on one small anchor, nor should life rest on a single hope.", author:"Epictetus" },
+  { text:"It is the act of an ill-instructed man to blame others for his own bad condition.", author:"Epictetus" },
+  { text:"First learn the meaning of what you say, and then speak.", author:"Epictetus" },
 ];
 function getDailyQuote(){
   const now = new Date();
@@ -1287,11 +1302,10 @@ const CONTEXT_MESSAGES = {
     "Patience is the whole point of this one. Let it be slow.",
     "This is the session that builds what a fast finish needs later.",
   ],
-  Rest: [
-    "Rest is not the opposite of training \u2014 it's part of it.",
-    "The adaptation from your last hard session happens today, not during it.",
-    "Recovery done well is still progress, even when it doesn't feel like it.",
-  ],
+  // Rest deliberately has no entry here (unlike Race/Long) - it recurs multiple times most
+  // weeks, and always overriding the quote/fact rotation on those days left the Stoic quotes
+  // getting crowded out for anyone training consistently. Rest days now just get the normal
+  // quote/fact rotation like Easy/Tempo/Interval days do.
 };
 // Reads today's planned session the same way Home's "Today's Plan" card does, so this can
 // never disagree with what's already shown there. Returns null if there's no plan set up yet.
@@ -1421,7 +1435,19 @@ let planProfileGlobal = null; // null = the running plan was never set up throug
 // Body Check only tracks knee and calf specifically - so its relevance is tied to whether
 // EITHER intake actually flagged one of those, not just "any injury exists." Strength's
 // injury list doesn't include "calf" as an option, so only "knee" is checked there.
+let bodyCheckDismissedGlobal = false;
+async function loadBodyCheckDismissed(){ try{ const r = await storageGetSafe('body_check_dismissed'); return r ? r.value === 'true' : false; }catch(e){ return false; } }
+async function saveBodyCheckDismissed(val){ await storageSetSafe('body_check_dismissed', val ? 'true' : 'false'); }
 function shouldShowBodyCheck(){
+  if(bodyCheckDismissedGlobal) return false;
+  const runFlags = (planProfileGlobal && planProfileGlobal.injuryFlags) || [];
+  const strengthFlags = (strengthProfileGlobal && strengthProfileGlobal.injuryFlags) || [];
+  return runFlags.includes('knee') || runFlags.includes('calf') || strengthFlags.includes('knee');
+}
+// Whether there's a genuine underlying reason to show Body Check, independent of whether it's
+// currently dismissed - used to decide whether the "show it again" control in Settings should
+// even appear (no point offering to restore something with no injury flag behind it at all).
+function hasBodyCheckReason(){
   const runFlags = (planProfileGlobal && planProfileGlobal.injuryFlags) || [];
   const strengthFlags = (strengthProfileGlobal && strengthProfileGlobal.injuryFlags) || [];
   return runFlags.includes('knee') || runFlags.includes('calf') || strengthFlags.includes('knee');
@@ -1823,7 +1849,7 @@ async function storageDeleteSafe(key){
 // A separate reserved passcode value, used ONLY for this feature, so a bug here can never
 // leak into anyone's actual training data. Nothing about a person's real passcode, plan, or
 // logs ever touches this bucket - only what they explicitly opt in to share (a display name
-// and a yes/no "trained this week").
+// and session-count-derived points/streaks - never distances, weights, or raw logs).
 const PULSE_SHARED_PASSCODE = '__training_pulse__';
 async function pulseSharedSet(key, value){
   try{
@@ -1864,28 +1890,114 @@ function makePulseId(){
   return (typeof crypto!=='undefined' && crypto.randomUUID) ? crypto.randomUUID() : 'pulse_' + Date.now() + '_' + Math.random().toString(36).slice(2);
 }
 
-// "Trained this week" reuses the exact same completion data already shown elsewhere (the Home
-// week tile, the strength week summary) - not a separate tracker, so it can't drift out of
-// sync with what someone actually sees logged for themselves.
-function computeTrainedThisWeek(){
-  const weekDates = getWeekDates();
+// Points for a given week (identified by its Monday), computed fresh each time from the exact
+// same completion data shown elsewhere in the app (session_completion for runs,
+// strength_session_completion for strength) - never a separately-tracked number that could
+// drift from what someone actually sees logged for themselves. 1pt per day with a completed
+// run, 1pt per day with a completed strength session, +1 bonus if that week's Long run was
+// completed, and flags an "iron day" if any single day had both a run and strength done.
+function computeWeeklyPoints(weekMonday){
+  const weekDates = [0,1,2,3,4,5,6].map(i=>addDays(weekMonday, i));
   const todayStr = toLocalISO(new Date());
   const sessionNames = getStrengthSessions();
-  return weekDates.some(d=>{
-    if(d > todayStr) return false;
-    if(sessionCompletionGlobal[d]) return true;
-    return sessionNames.some(s=>isStrengthDone(d, s));
+  const weekPlan = marathonPlanGlobal.find(w=>w.monday===weekMonday);
+  let points = 0, ironDay = false, longRunBonusGiven = false;
+  weekDates.forEach((d,i)=>{
+    if(d > todayStr) return;
+    const ranToday = !!sessionCompletionGlobal[d];
+    const strengthDoneToday = sessionNames.some(s=>isStrengthDone(d, s));
+    if(ranToday) points += 1;
+    if(strengthDoneToday) points += 1;
+    if(ranToday && strengthDoneToday) ironDay = true;
+    if(weekPlan && ranToday && !longRunBonusGiven){
+      const dayKey = DAY_KEYS[i];
+      const session = weekPlan.days[dayKey];
+      if(session && session.type === 'Long'){ points += 1; longRunBonusGiven = true; }
+    }
   });
+  return { points, ironDay };
 }
+
+// Loads this person's own record from the shared bucket (or starts a fresh one), and rolls
+// the week over if the calendar has moved on since it was last written: last week's points
+// get frozen into history, streak updates (continues if last week had points and the gap was
+// a normal single week, otherwise resets - a multi-week gap is treated as a broken streak
+// rather than guessed at), and the current week starts clean at zero.
+async function getOrInitPulseRecord(){
+  const currentMonday = getWeekDates()[0];
+  let record = null;
+  try{
+    const rows = await pulseSharedGetAll();
+    const mine = rows.find(r=>r.key === pulseSettingsGlobal.pulseId);
+    if(mine) record = JSON.parse(mine.value);
+  }catch(e){ /* fall through to a fresh record */ }
+  if(!record){
+    record = { name: pulseSettingsGlobal.name || 'Someone', weekStart: currentMonday, points:0, ironDay:false, streak:0, longestStreak:0, history:[], kudosInbox:[], lastUpdated:new Date().toISOString() };
+  }
+  record.history = record.history || [];
+  record.kudosInbox = record.kudosInbox || [];
+  if(record.weekStart !== currentMonday){
+    const daysGap = Math.round((new Date(currentMonday) - new Date(record.weekStart)) / 86400000);
+    record.history.push({ weekStart: record.weekStart, points: record.points||0 });
+    if(record.history.length > 26) record.history = record.history.slice(-26); // half a year of weeks is plenty
+    const isAdjacentWeek = daysGap === 7;
+    record.streak = (isAdjacentWeek && (record.points||0) > 0) ? (record.streak||0) + 1 : 0;
+    record.longestStreak = Math.max(record.longestStreak||0, record.streak);
+    record.weekStart = currentMonday;
+    record.points = 0;
+    record.ironDay = false;
+  }
+  return record;
+}
+
 async function updateTrainingPulseIfEnabled(){
   if(!pulseSettingsGlobal.enabled || !pulseSettingsGlobal.pulseId) return;
-  const value = JSON.stringify({
-    name: pulseSettingsGlobal.name || 'Someone',
-    weekStart: getWeekDates()[0],
-    trained: computeTrainedThisWeek(),
-  });
-  await pulseSharedSet(pulseSettingsGlobal.pulseId, value);
+  const record = await getOrInitPulseRecord();
+  const { points, ironDay } = computeWeeklyPoints(record.weekStart);
+  record.name = pulseSettingsGlobal.name || 'Someone';
+  record.points = points;
+  record.ironDay = ironDay;
+  record.lastUpdated = new Date().toISOString();
+  await pulseSharedSet(pulseSettingsGlobal.pulseId, JSON.stringify(record));
 }
+
+// Points for a specific past (or current) week from someone's record - checks their current
+// in-progress week first, then their frozen history. Returns null if there's no data for that
+// week at all (they weren't opted in yet, or haven't opened the app since).
+function getPointsForWeek(record, weekStart){
+  if(record.weekStart === weekStart) return record.points||0;
+  const h = (record.history||[]).find(x=>x.weekStart===weekStart);
+  return h ? h.points : null;
+}
+
+async function sendPulseKudos(toPulseId, toName){
+  try{
+    const rows = await pulseSharedGetAll();
+    const row = rows.find(r=>r.key === toPulseId);
+    if(!row) return;
+    const record = JSON.parse(row.value);
+    record.kudosInbox = record.kudosInbox || [];
+    record.kudosInbox.unshift({ from: pulseSettingsGlobal.name || 'Someone', at: new Date().toISOString() });
+    record.kudosInbox = record.kudosInbox.slice(0, 10);
+    await pulseSharedSet(toPulseId, JSON.stringify(record));
+    renderTrainingPulseTile();
+  }catch(e){ console.warn('Send kudos failed:', e); }
+}
+
+async function setPulseChallenge(text){
+  const value = JSON.stringify({ weekStart: getWeekDates()[0], text: text.slice(0,120), setBy: pulseSettingsGlobal.name || 'Someone' });
+  await pulseSharedSet('pulse_challenge', value);
+  renderTrainingPulseTile();
+}
+
+const PULSE_BADGE_DEFS = [
+  { id:'streak4', icon:'\u{1F525}', label:'4-Week Streak', check:(r)=> (r.streak||0) >= 4 },
+  { id:'ironweek', icon:'\u{1F4AA}', label:'Iron Week', check:(r)=> !!r.ironDay },
+  { id:'bigweek', icon:'\u2B50', label:'Big Week', check:(r)=> (r.points||0) >= 7 || (r.history||[]).some(h=>h.points>=7) },
+  { id:'champion', icon:'\u{1F3C6}', label:'Champion', check:(r)=> (r.weeksWon||0) >= 1 },
+  { id:'regular', icon:'\u{1F4C5}', label:'Season Regular', check:(r)=> (r.seasonTotal||0) >= 20 },
+];
+
 async function renderTrainingPulseTile(){
   const card = document.getElementById('homePulseCard');
   const body = document.getElementById('homePulseBody');
@@ -1893,17 +2005,108 @@ async function renderTrainingPulseTile(){
   if(!pulseSettingsGlobal.enabled){ card.style.display = 'none'; return; }
   card.style.display = 'block';
   body.innerHTML = `<p class="note" style="margin:0;">Loading\u2026</p>`;
+
   const rows = await pulseSharedGetAll();
-  const thisWeekStart = getWeekDates()[0];
-  const entries = rows.map(r=>{ try{ return JSON.parse(r.value); }catch(e){ return null; } }).filter(Boolean)
-    .filter(e => e.weekStart === thisWeekStart) // stale weeks just fall off the list, not shown as "not trained"
-    .sort((a,b)=> a.name.localeCompare(b.name));
+  const currentMonday = getWeekDates()[0];
+  const lastMonday = addDays(currentMonday, -7);
+  const challengeRow = rows.find(r=>r.key==='pulse_challenge');
+  let challenge = null;
+  if(challengeRow){ try{ const c = JSON.parse(challengeRow.value); if(c.weekStart===currentMonday) challenge = c; }catch(e){} }
+
+  const entries = rows.filter(r=>r.key!=='pulse_challenge').map(r=>{
+    try{ const e = JSON.parse(r.value); e.pulseId = r.key; return e; }catch(err){ return null; }
+  }).filter(Boolean).filter(e => e.weekStart === currentMonday); // stale (not-opened-in-a-while) entries just fall off, not shown as "0"
+
   if(entries.length === 0){ body.innerHTML = `<p class="note" style="margin:0;">Nobody\u2019s showing up here yet this week \u2014 give it a moment after your first session.</p>`; return; }
-  body.innerHTML = entries.map(e=>`
-    <div class="habit-item ${e.trained?'habit-done':''}">
-      <span style="width:18px;text-align:center;">${e.trained?'\u2713':'\u2013'}</span>
-      <span class="habit-label">${String(e.name).replace(/</g,'&lt;')}</span>
-    </div>`).join('');
+
+  // Season total + weeks-won tally, computed fresh from everyone's history rather than stored -
+  // avoids two devices ever disagreeing about who "actually" won a given past week.
+  const allWeekStarts = new Set();
+  entries.forEach(e=>{ allWeekStarts.add(e.weekStart); (e.history||[]).forEach(h=>allWeekStarts.add(h.weekStart)); });
+  const weeksWonCount = {};
+  allWeekStarts.forEach(ws=>{
+    if(ws === currentMonday) return; // don't crown a winner for the still-in-progress week
+    let bestId = null, bestPts = -1, tie = false;
+    entries.forEach(e=>{
+      const p = getPointsForWeek(e, ws);
+      if(p===null) return;
+      if(p > bestPts){ bestPts = p; bestId = e.pulseId; tie = false; }
+      else if(p === bestPts) tie = true;
+    });
+    if(bestId && !tie && bestPts > 0) weeksWonCount[bestId] = (weeksWonCount[bestId]||0) + 1;
+  });
+  entries.forEach(e=>{
+    e.seasonTotal = (e.history||[]).reduce((a,h)=>a+(h.points||0),0) + (e.points||0);
+    e.weeksWon = weeksWonCount[e.pulseId] || 0;
+  });
+
+  // Last week's winner banner - only shown once at least one entry actually has data for it.
+  let lastWeekBanner = '';
+  const lastWeekScores = entries.map(e=>({ name:e.name, pts:getPointsForWeek(e, lastMonday) })).filter(s=>s.pts!==null);
+  if(lastWeekScores.length > 0){
+    const top = lastWeekScores.reduce((a,b)=> b.pts>a.pts ? b : a);
+    const isTie = lastWeekScores.filter(s=>s.pts===top.pts).length > 1;
+    const scoreLine = lastWeekScores.sort((a,b)=>b.pts-a.pts).map(s=>`${s.name} ${s.pts}`).join(' \u00b7 ');
+    lastWeekBanner = `<div class="pulse-banner">${isTie ? '\u{1F91D} Last week: tied' : `\u{1F3C6} Last week: ${top.name} won`} \u2014 ${scoreLine}</div>`;
+  }
+
+  const challengeHtml = challenge
+    ? `<div class="pulse-banner">\u{1F3AF} This week: ${String(challenge.text).replace(/</g,'&lt;')} <span style="opacity:0.6;">(set by ${String(challenge.setBy).replace(/</g,'&lt;')})</span></div>`
+    : '';
+
+  const sorted = entries.slice().sort((a,b)=> (b.points||0) - (a.points||0));
+  const rowsHtml = sorted.map((e,i)=>{
+    const badges = PULSE_BADGE_DEFS.filter(b=>b.check(e)).map(b=>`<span title="${b.label}">${b.icon}</span>`).join(' ');
+    const isMe = e.pulseId === pulseSettingsGlobal.pulseId;
+    const recentKudos = (e.kudosInbox||[])[0];
+    const kudosNote = recentKudos ? `<div class="note" style="margin:2px 0 0;font-size:10px;">\u{1F44F} ${String(recentKudos.from).replace(/</g,'&lt;')} sent kudos</div>` : '';
+    return `<div class="habit-item" style="align-items:flex-start;">
+      <span style="width:18px;text-align:center;font-family:'IBM Plex Mono',monospace;">${i===0?'\u{1F947}':i+1}</span>
+      <div style="flex:1;">
+        <span class="habit-label">${String(e.name).replace(/</g,'&lt;')}${isMe?' (you)':''}</span>
+        <div class="note" style="margin:2px 0 0;font-size:10px;">${e.points||0} pt${e.points===1?'':'s'} this week \u00b7 \u{1F525} ${e.streak||0} wk streak \u00b7 ${e.seasonTotal} season</div>
+        ${badges ? `<div style="margin-top:4px;font-size:13px;">${badges}</div>` : ''}
+        ${kudosNote}
+      </div>
+      ${!isMe ? `<button class="feel-btn pulse-kudos-btn" data-id="${e.pulseId}" data-name="${String(e.name).replace(/"/g,'&quot;')}" style="padding:5px 10px;font-size:11px;">\u{1F44F} Kudos</button>` : ''}
+    </div>`;
+  }).join('');
+
+  const challengeInputHtml = `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line);">
+    <input type="text" id="pulseChallengeInput" placeholder="Set this week's challenge (e.g. most km wins)" maxlength="120" style="width:100%;">
+    <button class="feel-btn" id="setPulseChallengeBtn" style="margin-top:6px;padding:7px 14px;font-size:11px;">Set Challenge</button>
+  </div>`;
+
+  body.innerHTML = lastWeekBanner + challengeHtml + rowsHtml + challengeInputHtml;
+
+  body.querySelectorAll('.pulse-kudos-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=> sendPulseKudos(btn.dataset.id, btn.dataset.name));
+  });
+  const challengeBtn = document.getElementById('setPulseChallengeBtn');
+  if(challengeBtn){
+    challengeBtn.addEventListener('click', ()=>{
+      const text = document.getElementById('pulseChallengeInput').value.trim();
+      if(text) setPulseChallenge(text);
+    });
+  }
+}
+
+let pulseRealtimeChannel = null;
+function subscribeTrainingPulseRealtime(){
+  // Requires Realtime turned on for the kv_store table in the Supabase dashboard (Database ->
+  // Replication, one-time toggle - not something this code can enable itself). If it hasn't
+  // been turned on, this subscription just never fires and the tile falls back to updating on
+  // its normal page-load/action refreshes, exactly like before - nothing breaks either way.
+  if(!supabaseClient || pulseRealtimeChannel) return;
+  try{
+    pulseRealtimeChannel = supabaseClient
+      .channel('training_pulse_changes')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'kv_store', filter: `passcode=eq.${PULSE_SHARED_PASSCODE}` },
+        () => { renderTrainingPulseTile(); }
+      )
+      .subscribe();
+  }catch(e){ console.warn('Training Pulse realtime subscription failed to start:', e); }
 }
 
 
@@ -3854,15 +4057,54 @@ function renderVolumePainChart(){
   }
 }
 
+function renderBodyCheckSettingsRow(){
+  const card = document.getElementById('bodyCheckSettingsCard');
+  const note = document.getElementById('bodyCheckSettingsNote');
+  const btn = document.getElementById('toggleBodyCheckBtn');
+  if(!card || !note || !btn) return;
+  // Only worth showing this control at all if there's a real injury flag behind it - no
+  // point offering to "turn Body Check back on" to someone who never flagged anything.
+  if(!hasBodyCheckReason()){ card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  if(bodyCheckDismissedGlobal){
+    note.textContent = 'Currently hidden. Turn it back on any time \u2014 nothing about your original injury flags is lost either way.';
+    btn.textContent = 'Show Body Check again';
+  } else {
+    note.textContent = 'Currently shown on Home and Habits, based on the knee/calf flags from your setup.';
+    btn.textContent = 'Hide Body Check';
+  }
+}
+
 async function initPainCheck(){
   // Body Check only makes sense for someone who's actually flagged a relevant issue at
   // setup - showing it to everyone by default was presenting an old injury-specific feature
   // as if it were a universal one. Hidden (not just left inert) when neither intake flagged
-  // knee or calf specifically.
+  // knee or calf specifically, OR when it's been manually dismissed (injuries subsided).
+  bodyCheckDismissedGlobal = await loadBodyCheckDismissed();
   const showBodyCheck = shouldShowBodyCheck();
   document.getElementById('homeBodyCheckCard').style.display = showBodyCheck ? 'block' : 'none';
   document.getElementById('painTrendCard').style.display = showBodyCheck ? 'block' : 'none';
   document.getElementById('volumePainCard').style.display = showBodyCheck ? 'block' : 'none';
+  renderBodyCheckSettingsRow();
+
+  document.getElementById('dismissBodyCheckBtn').addEventListener('click', async ()=>{
+    if(!confirm('Hide Body Check? You can turn it back on any time from Settings.')) return;
+    bodyCheckDismissedGlobal = true;
+    await saveBodyCheckDismissed(true);
+    document.getElementById('homeBodyCheckCard').style.display = 'none';
+    document.getElementById('painTrendCard').style.display = 'none';
+    document.getElementById('volumePainCard').style.display = 'none';
+    renderBodyCheckSettingsRow();
+  });
+  document.getElementById('toggleBodyCheckBtn').addEventListener('click', async ()=>{
+    bodyCheckDismissedGlobal = !bodyCheckDismissedGlobal;
+    await saveBodyCheckDismissed(bodyCheckDismissedGlobal);
+    const showBodyCheckNow = shouldShowBodyCheck();
+    document.getElementById('homeBodyCheckCard').style.display = showBodyCheckNow ? 'block' : 'none';
+    document.getElementById('painTrendCard').style.display = showBodyCheckNow ? 'block' : 'none';
+    document.getElementById('volumePainCard').style.display = showBodyCheckNow ? 'block' : 'none';
+    renderBodyCheckSettingsRow();
+  });
 
   painLog = await loadPainLog();
   renderPainCheck();
@@ -3894,6 +4136,7 @@ function renderHome(){
   if(welcomeCard) welcomeCard.style.display = (isBrandNewRunningGlobal && !strengthProfileGlobal) ? 'block' : 'none';
 
   renderTrainingPulseTile(); // async, fire-and-forget - fills in once its own fetch resolves
+  subscribeTrainingPulseRealtime();
 
   const todayStr = toLocalISO(new Date());
   const weekDates = getWeekDates(); // [Mon..Sun] for the current calendar week
