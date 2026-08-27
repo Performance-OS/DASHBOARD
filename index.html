@@ -283,6 +283,7 @@
       <div>
         <h1 class="display">Send It</h1>
         <p id="subhead">Strava</p>
+        <p id="momentumBadge" style="font-size:11px;color:var(--text-dim);margin:4px 0 0;display:none;">&#128293; <span id="streakFlameNum">0</span>-day streak</p>
       </div>
       <div class="countdown-wrap">
         <div class="countdown">
@@ -325,17 +326,14 @@
 
   <!-- HOME VIEW -->
   <div class="view active" id="view-home">
-    <div class="card" style="padding:16px 20px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
-        <div>
-          <span style="font-size:9px;color:var(--accent);letter-spacing:0.14em;text-transform:uppercase;font-weight:600;">Momentum</span>
-          <p id="momentumText" style="font-size:12px;color:var(--text-dim);line-height:1.5;margin:8px 0 0;"></p>
-        </div>
-        <div style="text-align:center;flex-shrink:0;">
-          <div id="streakFlameNum" style="font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:600;color:#fff;">0</div>
-          <div style="font-size:8px;color:var(--text-dim);letter-spacing:0.1em;text-transform:uppercase;white-space:nowrap;">&#128293; day streak</div>
-        </div>
-      </div>
+    <div class="card" id="homeWelcomeCard" style="display:none;border-color:var(--accent);">
+      <h2>Welcome to Send It</h2>
+      <p class="note" style="margin-top:0;">Nothing's set up on this passcode yet. Head to the <b>Running Shit</b> tab to build a race plan, or <b>Gym Shit</b> to generate a strength program &mdash; either (or both) gets you started. Everything else on Home fills in once you have.</p>
+    </div>
+
+    <div class="card" id="homePulseCard" style="display:none;">
+      <h2>Training Pulse</h2>
+      <div id="homePulseBody"></div>
     </div>
 
     <div class="refresh-bar">
@@ -383,10 +381,11 @@
       <div class="week-cal" id="weekCalendar"></div>
     </div>
 
-    <div class="stat-grid" id="statGrid"></div>
+    <div class="stat-grid" id="statGrid" style="display:none;"></div>
 
     <div class="card">
       <h2>Weekly Distance (km)</h2>
+      <p class="note" id="weeklyChartCaption" style="margin-top:0;"></p>
       <canvas id="weeklyChart"></canvas>
     </div>
 
@@ -762,6 +761,19 @@
       <h2>Account</h2>
       <p class="note" style="margin-top:0;">This device is signed in under a passcode &mdash; enter the exact same one on any other device to see the same data there, automatically.</p>
       <button class="feel-btn" id="changePasscodeBtn" style="padding:9px 18px;">Log Out</button>
+    </div>
+
+    <div class="card">
+      <h2>Training Pulse</h2>
+      <p class="note" style="margin-top:0;">Opt in to show a display name and a simple yes/no &ldquo;trained this week&rdquo; to anyone else using this dashboard, and see the same for them on Home. Nothing else about your data is shared &mdash; no plan, no logs, no numbers, and your passcode itself is never visible to anyone.</p>
+      <div class="field" style="margin-top:10px;">
+        <label><input type="checkbox" id="pulseEnabledToggle"> Show me on Training Pulse</label>
+      </div>
+      <div class="field" style="margin-top:10px;">
+        <label>Display name</label>
+        <input type="text" id="pulseNameInput" placeholder="e.g. Alex" maxlength="24" style="max-width:220px;">
+      </div>
+      <button class="feel-btn" id="savePulseSettingsBtn" style="margin-top:10px;">Save</button>
     </div>
 
     <div class="card">
@@ -1360,8 +1372,9 @@ function renderDailyMotivation(){
     factBlock.style.display = 'block';
     document.getElementById('dailyFactText').textContent = getDailyFact();
   }
-  document.getElementById('momentumText').textContent = getMomentumText();
-  document.getElementById('streakFlameNum').textContent = computeHabitStreak();
+  const streakVal = computeHabitStreak();
+  document.getElementById('streakFlameNum').textContent = streakVal;
+  document.getElementById('momentumBadge').style.display = streakVal > 0 ? 'block' : 'none';
 }
 function fmtDate(iso){ const d=new Date(iso+'T00:00:00'); return d.toLocaleDateString('en-GB',{day:'numeric',month:'short'}); }
 function fmtTime(s){ const h=Math.floor(s/3600), m=Math.floor((s%3600)/60); return h>0?`${h}h ${m}m`:`${m}m`; }
@@ -1408,6 +1421,7 @@ let liftHistoryChartInstance = null;
 let strengthLogGlobal = {};
 let strengthGoalsGlobal = {};
 let strengthProfileGlobal = null; // null = no explicit Strength setup done yet on this passcode
+let isBrandNewRunningGlobal = true; // set explicitly in initPlan() once goal_type is actually checked
 let planProfileGlobal = null; // null = the running plan was never set up through the intake form (e.g. still on the file's own default)
 // Body Check only tracks knee and calf specifically - so its relevance is tied to whether
 // EITHER intake actually flagged one of those, not just "any injury exists." Strength's
@@ -1438,12 +1452,12 @@ function computeDerived(){
 function renderLog(){
   const {avg4wk, thisWeek, peakWeek} = computeDerived();
   const longestRecent = weeklyData.recent.length ? Math.max(...weeklyData.recent.map(r=>r.km)) : 0;
-  document.getElementById('statGrid').innerHTML = `
-    <div class="stat"><div class="v">${thisWeek.km.toFixed(1)}</div><div class="k">This week (km)</div></div>
-    <div class="stat"><div class="v">${avg4wk.toFixed(1)}</div><div class="k">4-wk avg (km)</div></div>
-    <div class="stat"><div class="v">${peakWeek.km.toFixed(1)}</div><div class="k">Peak week</div></div>
-    <div class="stat"><div class="v">${longestRecent.toFixed(1)}</div><div class="k">Longest recent run (km)</div></div>
-  `;
+  const captionEl = document.getElementById('weeklyChartCaption');
+  if(captionEl){
+    captionEl.textContent = weeklyData.weekly.length
+      ? `4-wk avg: ${avg4wk.toFixed(1)}km \u00b7 Peak week: ${peakWeek.km.toFixed(1)}km \u00b7 Longest recent run: ${longestRecent.toFixed(1)}km`
+      : '';
+  }
   const ctx = document.getElementById('weeklyChart');
   try{
     if(chartInstance) chartInstance.destroy();
@@ -1777,20 +1791,22 @@ async function storageSetSafe(key, value){
 }
 
 async function storageGetSafe(key){
-  return runQueued(async () => {
-    if(!storageAvailable()) return null;
-    try{
-      // maybeSingle() returns {data:null} for a key that doesn't exist yet, rather than
-      // throwing - that's the normal, expected case for anything not touched yet.
-      const { data, error } = await supabaseClient.from('kv_store').select('value')
-        .eq('passcode', ACTIVE_PASSCODE).eq('key', key).maybeSingle();
-      if(error) throw error;
-      return data ? { value: data.value } : null;
-    }catch(e){
-      console.warn('Storage read failed:', key, e);
-      return null;
-    }
-  });
+  // Deliberately NOT routed through runQueued/__storageQueue - that queue's 350ms-per-operation
+  // spacing exists to protect against flooding Supabase with rapid duplicate WRITES, not reads.
+  // Serializing every read through it too meant 20+ page-load reads took 7+ seconds of pure
+  // artificial delay before any actual network time. Reads can safely run concurrently.
+  if(!storageAvailable()) return null;
+  try{
+    // maybeSingle() returns {data:null} for a key that doesn't exist yet, rather than
+    // throwing - that's the normal, expected case for anything not touched yet.
+    const { data, error } = await supabaseClient.from('kv_store').select('value')
+      .eq('passcode', ACTIVE_PASSCODE).eq('key', key).maybeSingle();
+    if(error) throw error;
+    return data ? { value: data.value } : null;
+  }catch(e){
+    console.warn('Storage read failed:', key, e);
+    return null;
+  }
 }
 
 async function storageDeleteSafe(key){
@@ -1807,6 +1823,94 @@ async function storageDeleteSafe(key){
     }
   });
 }
+
+// --- Training Pulse: the one deliberate exception to "every passcode's data is isolated" ---
+// A separate reserved passcode value, used ONLY for this feature, so a bug here can never
+// leak into anyone's actual training data. Nothing about a person's real passcode, plan, or
+// logs ever touches this bucket - only what they explicitly opt in to share (a display name
+// and a yes/no "trained this week").
+const PULSE_SHARED_PASSCODE = '__training_pulse__';
+async function pulseSharedSet(key, value){
+  try{
+    const { error } = await supabaseClient.from('kv_store').upsert(
+      { passcode: PULSE_SHARED_PASSCODE, key, value, updated_at: new Date().toISOString() },
+      { onConflict: 'passcode,key' }
+    );
+    if(error) throw error;
+    return true;
+  }catch(e){ console.warn('Training Pulse shared write failed:', e); return false; }
+}
+async function pulseSharedGetAll(){
+  try{
+    const { data, error } = await supabaseClient.from('kv_store').select('key,value')
+      .eq('passcode', PULSE_SHARED_PASSCODE);
+    if(error) throw error;
+    return data || [];
+  }catch(e){ console.warn('Training Pulse shared read failed:', e); return []; }
+}
+async function pulseSharedDelete(key){
+  try{
+    const { error } = await supabaseClient.from('kv_store').delete()
+      .eq('passcode', PULSE_SHARED_PASSCODE).eq('key', key);
+    if(error) throw error;
+    return true;
+  }catch(e){ console.warn('Training Pulse shared delete failed:', e); return false; }
+}
+
+let pulseSettingsGlobal = { enabled:false, name:'', pulseId:'' };
+async function loadPulseSettings(){
+  try{ const r = await storageGetSafe('pulse_settings'); return r ? JSON.parse(r.value) : { enabled:false, name:'', pulseId:'' }; }
+  catch(e){ return { enabled:false, name:'', pulseId:'' }; }
+}
+async function savePulseSettings(p){ await storageSetSafe('pulse_settings', JSON.stringify(p)); }
+function makePulseId(){
+  // Random, not derived from the passcode itself - the shared bucket should never contain
+  // anything that could be used to guess or target someone's actual passcode.
+  return (typeof crypto!=='undefined' && crypto.randomUUID) ? crypto.randomUUID() : 'pulse_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+}
+
+// "Trained this week" reuses the exact same completion data already shown elsewhere (the Home
+// week tile, the strength week summary) - not a separate tracker, so it can't drift out of
+// sync with what someone actually sees logged for themselves.
+function computeTrainedThisWeek(){
+  const weekDates = getWeekDates();
+  const todayStr = toLocalISO(new Date());
+  const sessionNames = getStrengthSessions();
+  return weekDates.some(d=>{
+    if(d > todayStr) return false;
+    if(sessionCompletionGlobal[d]) return true;
+    return sessionNames.some(s=>isStrengthDone(d, s));
+  });
+}
+async function updateTrainingPulseIfEnabled(){
+  if(!pulseSettingsGlobal.enabled || !pulseSettingsGlobal.pulseId) return;
+  const value = JSON.stringify({
+    name: pulseSettingsGlobal.name || 'Someone',
+    weekStart: getWeekDates()[0],
+    trained: computeTrainedThisWeek(),
+  });
+  await pulseSharedSet(pulseSettingsGlobal.pulseId, value);
+}
+async function renderTrainingPulseTile(){
+  const card = document.getElementById('homePulseCard');
+  const body = document.getElementById('homePulseBody');
+  if(!card || !body) return;
+  if(!pulseSettingsGlobal.enabled){ card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  body.innerHTML = `<p class="note" style="margin:0;">Loading\u2026</p>`;
+  const rows = await pulseSharedGetAll();
+  const thisWeekStart = getWeekDates()[0];
+  const entries = rows.map(r=>{ try{ return JSON.parse(r.value); }catch(e){ return null; } }).filter(Boolean)
+    .filter(e => e.weekStart === thisWeekStart) // stale weeks just fall off the list, not shown as "not trained"
+    .sort((a,b)=> a.name.localeCompare(b.name));
+  if(entries.length === 0){ body.innerHTML = `<p class="note" style="margin:0;">Nobody\u2019s showing up here yet this week \u2014 give it a moment after your first session.</p>`; return; }
+  body.innerHTML = entries.map(e=>`
+    <div class="habit-item ${e.trained?'habit-done':''}">
+      <span style="width:18px;text-align:center;">${e.trained?'\u2713':'\u2013'}</span>
+      <span class="habit-label">${String(e.name).replace(/</g,'&lt;')}</span>
+    </div>`).join('');
+}
+
 
 async function loadVal(key){ try{ const r = await storageGetSafe(key); return r?r.value:null; }catch(e){ return null; } }
 async function saveVal(key,val){ await storageSetSafe(key,val); }
@@ -1905,13 +2009,23 @@ function getLastEntry(strengthLog, exerciseName, beforeDate){
   if(!dates.length) return null;
   return {date: dates[dates.length-1], ...hist[dates[dates.length-1]]};
 }
-function suggestionFor(last){
+// Increment sizes by role - standard, well-established progression sizing: compound barbell
+// lifts can add real load session-to-session, isolation/accessory/core work usually can't
+// without breaking form, so those get a smaller, more realistic bump.
+const OVERLOAD_INCREMENT_BY_ROLE = { compound:2.5, accessory:1.25, isolation:1.25, main:1.25 };
+const OVERLOAD_INCREMENT_DEFAULT = 1.25; // custom/renamed exercises not in the library
+
+function suggestionFor(last, exerciseName){
   const w = last ? getTopWeight(last) : null;
   if(w===null) return '';
-  if(last.feeling==='Easy') return `Top set felt easy last time \u2014 try ${w+2.5}kg`;
-  if(last.feeling==='Hard') return `Top set felt hard last time \u2014 maybe repeat ${w}kg`;
-  if(last.feeling==='Right') return `Top set felt right \u2014 try ${w+1.25}kg, or repeat ${w}kg`;
-  return `Last top set: ${w}kg`;
+  const role = exerciseName ? LIBRARY_EXERCISE_ROLE.get(exerciseName) : undefined;
+  const inc = OVERLOAD_INCREMENT_BY_ROLE[role] ?? OVERLOAD_INCREMENT_DEFAULT;
+  const setCount = getEntrySets(last).length;
+  const setsLabel = setCount ? `${setCount} set${setCount===1?'':'s'} at ` : '';
+  if(last.feeling==='Easy') return `Logged ${setsLabel}${w}kg last time and it felt easy \u2014 try ${w+inc}kg`;
+  if(last.feeling==='Hard') return `Logged ${setsLabel}${w}kg last time and it felt hard \u2014 maybe repeat ${w}kg`;
+  if(last.feeling==='Right') return `Logged ${setsLabel}${w}kg last time, felt right \u2014 try ${w+(inc/2)}kg, or repeat ${w}kg`;
+  return `Last logged: ${setsLabel}${w}kg`;
 }
 async function saveDayProgress(p){ await storageSetSafe('day_progress', JSON.stringify(p)); }
 
@@ -2311,6 +2425,13 @@ function getStrengthSessions(){ return Object.keys(activeExercises); }
 // constant is just its starting point (and what "Reset to defaults" restores).
 const DEFAULT_STRENGTH_SCHEDULE = { Mon:'Upper', Wed:'Lower', Fri:'Core' };
 let strengthScheduleGlobal = JSON.parse(JSON.stringify(DEFAULT_STRENGTH_SCHEDULE));
+// strengthScheduleGlobal always holds SOMETHING (it needs a starting point for the setup
+// form's day-pickers and the "Reset to defaults" button), but that starting point is a
+// placeholder, not real data. Anything shown to the person on Home must use this instead,
+// which only returns the real schedule once strengthProfileGlobal confirms setup actually
+// happened - otherwise a brand-new passcode would show a fake Upper/Lower/Core Mon/Wed/Fri
+// schedule as if it were their real plan.
+function getEffectiveStrengthSchedule(){ return strengthProfileGlobal ? strengthScheduleGlobal : {}; }
 async function loadStrengthSchedule(){ try{ const r = await storageGetSafe('strength_schedule'); return r?JSON.parse(r.value):null; }catch(e){ return null; } }
 async function saveStrengthSchedule(sched){ await storageSetSafe('strength_schedule', JSON.stringify(sched)); }
 const SESSION_LOG_COLORS = { Upper:'#E07A4A', Lower:'#C9633F', Core:'#6EA88C', Push:'#C9633F', Pull:'#6E8AA8', Legs:'#E07A4A', 'Full Body':'#6EA88C' };
@@ -2338,6 +2459,7 @@ async function toggleStrengthDone(dateStr, session, checked){
   if(checked) strengthSessionCompletion[key] = true;
   else delete strengthSessionCompletion[key];
   await saveStrengthSessionCompletion(strengthSessionCompletion);
+  updateTrainingPulseIfEnabled(); // fire-and-forget - no-op if not opted in
   try{ renderHome(); }catch(e){ /* Home not ready yet - the end-of-load renderHome() call will catch it */ }
 }
 function initStrengthSessionLogger(){
@@ -2420,7 +2542,7 @@ function initStrengthSessionLogger(){
       const savedFeeling = existing.feeling || '';
       const last = getLastEntry(strengthLogGlobal, ex.name, todayKey);
       const lastSets = last ? getEntrySets(last) : [];
-      const suggestion = ex.weighted!==false ? suggestionFor(last) : '';
+      const suggestion = ex.weighted!==false ? suggestionFor(last, ex.name) : '';
       const numSets = ex.sets || 1;
       const setInputs = Array.from({length:numSets}).map((_,si)=>
         `<input type="number" class="ex-weight" data-exercise="${ex.name}" data-date="${todayKey}" data-set="${si}" placeholder="S${si+1}" step="0.5" value="${savedSets[si]!==undefined?savedSets[si]:''}">`
@@ -2521,9 +2643,23 @@ function initStrengthSessionLogger(){
     const lastTop = last ? getTopWeight(last[1]) : null;
     const lastVal = lastTop!==null ? (use1RM ? Math.round(estimate1RM(lastTop,repsForExercise)*10)/10 : lastTop) : null;
     const metricLabel = use1RM ? 'Est. 1RM' : 'Logged weight';
-    document.getElementById('liftHistorySummary').textContent = last
+
+    // PR = the best value across all logged history for this exercise (ties go to the
+    // earliest occurrence, so a repeat of your best doesn't get relabeled as a "new" PR).
+    let prIndex = -1, prValue = null;
+    values.forEach((v,i)=>{ if(v!==null && (prValue===null || v>prValue)){ prValue=v; prIndex=i; } });
+    const todayKey = toLocalISO(new Date());
+    const isNewPRToday = prIndex === values.length-1 && entries[prIndex] && entries[prIndex][0] === todayKey && entries.length > 1;
+    const prDateLabel = prIndex>=0 ? fmtDate(entries[prIndex][0]) : '';
+
+    document.getElementById('liftHistorySummary').innerHTML = last
       ? `${metricLabel}: ${lastVal}kg, felt "${last[1].feeling || 'unrated'}" last session`
+        + (prValue!==null ? ` &middot; ${isNewPRToday ? '\u{1F3C6} New PR today: ' : 'PR: '}${prValue}kg${isNewPRToday ? '' : ` (${prDateLabel})`}` : '')
       : '';
+
+    const pointRadii = entries.map((_,i)=> i===prIndex ? 8 : 5);
+    const pointBorderWidths = entries.map((_,i)=> i===prIndex ? 3 : 1);
+    const prPointColor = '#E8C468'; // gold, distinct from the feeling colors used elsewhere
 
     const logWrap = document.getElementById('liftSetLogWrap');
     const logBody = document.getElementById('liftSetLogBody');
@@ -2549,8 +2685,9 @@ function initStrengthSessionLogger(){
         type:'line',
         data:{ labels, datasets:[{
           data: values, borderColor:'#E07A4A', backgroundColor:'rgba(224,122,74,0.14)',
-          pointBackgroundColor: pointColors, pointBorderColor: pointColors,
-          pointRadius:5, pointHoverRadius:7, tension:0.2, fill:true
+          pointBackgroundColor: pointColors.map((c,i)=> i===prIndex ? prPointColor : c),
+          pointBorderColor: pointColors.map((c,i)=> i===prIndex ? prPointColor : c),
+          pointRadius: pointRadii, pointBorderWidth: pointBorderWidths, pointHoverRadius:9, tension:0.2, fill:true
         }]},
         options:{
           plugins:{ legend:{ display:false } },
@@ -2768,6 +2905,22 @@ const LIBRARY_EXERCISE_LOOKUP = (function(){
 })();
 const ALL_LIBRARY_EXERCISE_NAMES = Array.from(LIBRARY_EXERCISE_LOOKUP.keys()).sort();
 
+// Which role (compound/accessory/isolation/main) each library exercise belongs to - used only
+// to size progressive-overload suggestions sensibly: a compound lift can jump 2.5kg between
+// sessions, a small isolation movement usually can't. Custom/renamed exercises not in the
+// library fall back to the smaller, safer increment.
+const LIBRARY_EXERCISE_ROLE = (function(){
+  const map = new Map();
+  Object.values(STRENGTH_MUSCLE_LIBRARY).forEach(byEquipment=>{
+    Object.values(byEquipment).forEach(byRole=>{
+      Object.entries(byRole).forEach(([role, list])=>{
+        list.forEach(ex=>{ if(!map.has(ex.name)) map.set(ex.name, role); });
+      });
+    });
+  });
+  return map;
+})();
+
 function renderExerciseEditor(){
   const container = document.getElementById('exerciseEditorCategories');
   const categories = Object.keys(activeExercises);
@@ -2861,22 +3014,31 @@ function renderExerciseEditor(){
 async function initPlan(){
   document.getElementById('resetMarathonPlanBtn').addEventListener('click', resetMarathonPlan);
 
-  const customExercises = await loadCustomExercises();
+  const [customExercises, savedSchedule] = await Promise.all([loadCustomExercises(), loadStrengthSchedule()]);
   Object.keys(customExercises).forEach(cat=>{
     if(activeExercises[cat] && Array.isArray(customExercises[cat])) activeExercises[cat] = customExercises[cat];
   });
   recomputeExercise1RMReps();
-  const savedSchedule = await loadStrengthSchedule();
   if(savedSchedule) strengthScheduleGlobal = savedSchedule;
   await initExerciseEditor();
-  strengthLogGlobal = await loadStrengthLog();
-  strengthGoalsGlobal = await loadStrengthGoals();
-  strengthSessionCompletion = await loadStrengthSessionCompletion();
+  // These are nine independent reads - none of them depend on each other's result, they just
+  // each populate a different global. Running them concurrently instead of one at a time is
+  // the actual fix for the page feeling slow to load: nine sequential Supabase round-trips
+  // becomes roughly one round-trip's worth of wall-clock time.
+  const [
+    strengthLogRaw, strengthGoalsRaw, strengthSessionCompletionRaw,
+    goalTypeRaw, planProfileRaw, raceDateRaw, goalTimeRaw, marathonPlanRaw, sessionCompletionRaw
+  ] = await Promise.all([
+    loadStrengthLog(), loadStrengthGoals(), loadStrengthSessionCompletion(),
+    loadGoalType(), storageGetSafe('plan_profile'), loadVal('race_date'), loadVal('goal_time'),
+    loadMarathonPlan(), loadSessionCompletion(),
+  ]);
+  strengthLogGlobal = strengthLogRaw;
+  strengthGoalsGlobal = strengthGoalsRaw;
+  strengthSessionCompletion = strengthSessionCompletionRaw;
   initStrengthSessionLogger();
 
-  const goalTypeRaw = await loadGoalType();
   try{
-    const planProfileRaw = await storageGetSafe('plan_profile');
     planProfileGlobal = planProfileRaw ? JSON.parse(planProfileRaw.value) : null;
   }catch(e){ planProfileGlobal = null; }
   // Fully explicit now, no inference: "set up" means goal_type has actually been saved, full
@@ -2884,26 +3046,27 @@ async function initPlan(){
   // version of that guess eventually broke for some real sequence of actions. This can't -
   // there's no ambiguous state left to misread.
   const isBrandNewPasscode = (goalTypeRaw === null);
+  isBrandNewRunningGlobal = isBrandNewPasscode;
   goalTypeGlobal = goalTypeRaw || 'Marathon'; // still need a sane internal value even pre-setup
   document.getElementById('activeGoalTypeFlag').textContent = isBrandNewPasscode ? 'Not set up' : goalTypeGlobal;
   // Nav label stays fixed ("Running Shit") regardless of goal type now - no longer
   // overwritten with "${goalType} Plan".
 
-  let raceDate = await loadVal('race_date');
+  let raceDate = raceDateRaw;
   if(!raceDate) raceDate = isBrandNewPasscode ? '' : DEFAULT_RACE_DATE;
   document.getElementById('raceDate').value = raceDate;
-  let goalTime = await loadVal('goal_time');
+  let goalTime = goalTimeRaw;
   if(!goalTime) goalTime = '3:45:00';
   document.getElementById('goalTime').value = goalTime;
 
-  let marathonPlan = await loadMarathonPlan();
+  let marathonPlan = marathonPlanRaw;
   if(!marathonPlan || !Array.isArray(marathonPlan) || marathonPlan.length === 0){
     // A brand new passcode gets a genuinely empty plan and an onboarding prompt below - NOT
     // this app's original hand-built Marathon plan or its real race date. Those stay reserved
     // for an existing Marathon-goal passcode explicitly using Reset, never a fresh one.
     marathonPlan = isBrandNewPasscode ? [] : (goalTypeGlobal === 'Marathon' ? JSON.parse(JSON.stringify(DEFAULT_MARATHON_PLAN)) : generateFullPlan(goalTypeGlobal, raceDate));
   }
-  const sessionCompletion = await loadSessionCompletion();
+  const sessionCompletion = sessionCompletionRaw;
   marathonPlanGlobal = marathonPlan;
   sessionCompletionGlobal = sessionCompletion;
 
@@ -3030,6 +3193,7 @@ async function initPlan(){
         sessionCompletion[dkey] = e.target.checked;
         if(!e.target.checked) delete sessionCompletion[dkey];
         await saveSessionCompletion(sessionCompletion);
+        updateTrainingPulseIfEnabled(); // fire-and-forget - no-op if not opted in
         const card = e.target.closest('.session-card');
         card.classList.toggle('session-done', e.target.checked);
         e.target.nextElementSibling.textContent = e.target.checked ? 'Done' : 'Mark done';
@@ -3073,7 +3237,7 @@ async function initPlan(){
       const dkey = addDays(week.monday, i);
       const isToday = dkey === todayStr;
       const runSession = week.days[dk];
-      const strengthType = strengthScheduleGlobal[dk];
+      const strengthType = getEffectiveStrengthSchedule()[dk];
 
       let lines = '';
       if(runSession){
@@ -3100,6 +3264,7 @@ async function initPlan(){
         const dkey = e.target.dataset.date;
         if(e.target.checked) sessionCompletion[dkey] = true; else delete sessionCompletion[dkey];
         await saveSessionCompletion(sessionCompletion);
+        updateTrainingPulseIfEnabled(); // fire-and-forget - no-op if not opted in
         renderMarathonTable();
         renderWeekPlanTile();
       });
@@ -3726,6 +3891,15 @@ function homeWeekTotal(week){
 }
 
 function renderHome(){
+  // Explicit flags, not inferred - same pattern as everything else here. Only shows when
+  // BOTH are genuinely un-set-up; setting up either one is enough to dismiss it for good
+  // (checked fresh on every renderHome() call, so it disappears the moment either is done,
+  // no reload needed).
+  const welcomeCard = document.getElementById('homeWelcomeCard');
+  if(welcomeCard) welcomeCard.style.display = (isBrandNewRunningGlobal && !strengthProfileGlobal) ? 'block' : 'none';
+
+  renderTrainingPulseTile(); // async, fire-and-forget - fills in once its own fetch resolves
+
   const todayStr = toLocalISO(new Date());
   const weekDates = getWeekDates(); // [Mon..Sun] for the current calendar week
   const mondayStr = weekDates[0];
@@ -3738,18 +3912,20 @@ function renderHome(){
   const planWeek = marathonPlanGlobal.find(w=>w.monday===mondayStr);
   const plannedKm = planWeek ? homeWeekTotal(planWeek) : null;
 
+  const effectiveSchedule = getEffectiveStrengthSchedule();
   let strengthDone = 0;
-  Object.keys(strengthScheduleGlobal).forEach((dayKey,i)=>{
+  Object.keys(effectiveSchedule).forEach((dayKey)=>{
     const idx = DAY_KEYS.indexOf(dayKey);
-    if(isStrengthDone(weekDates[idx], strengthScheduleGlobal[dayKey])) strengthDone++;
+    if(isStrengthDone(weekDates[idx], effectiveSchedule[dayKey])) strengthDone++;
   });
+  const strengthTotal = Object.keys(effectiveSchedule).length;
 
   const habitPct = habitDayPct(todayStr);
   const streak = computeHabitStreak();
 
   document.getElementById('homeStatGrid').innerHTML = `
     <div class="stat"><div class="v">${actualKm.toFixed(1)}${plannedKm!=null?`<span style="font-size:14px;color:var(--text-dim);">/${plannedKm.toFixed(1)}</span>`:''}</div><div class="k">Km this week${plannedKm!=null?' (actual/planned)':''}</div></div>
-    <div class="stat"><div class="v">${strengthDone}/3</div><div class="k">Strength sessions</div></div>
+    <div class="stat"><div class="v">${strengthDone}/${strengthTotal}</div><div class="k">Strength sessions</div></div>
     <div class="stat"><div class="v">${habitPct}%</div><div class="k">Habits today</div></div>
     <div class="stat"><div class="v">${streak}</div><div class="k">Day streak</div></div>
   `;
@@ -3771,8 +3947,8 @@ function renderHome(){
   }
   const strengthDayKey = DAY_KEYS[weekDates.indexOf(todayStr)];
   let strengthHtml = '';
-  if(strengthScheduleGlobal[strengthDayKey]){
-    const session = strengthScheduleGlobal[strengthDayKey];
+  if(effectiveSchedule[strengthDayKey]){
+    const session = effectiveSchedule[strengthDayKey];
     const done = isStrengthDone(todayStr, session);
     strengthHtml = `<div class="home-row"><div class="t">Strength &middot; ${session}</div><span class="${done?'done':'pending'}">${done?'Done':'Not yet'}</span></div>`;
   }
@@ -3857,6 +4033,14 @@ async function initHabits(){
   try{
     initStatusBar();
   }catch(e){ console.error('initStatusBar failed:', e); }
+  // Early paint: the header quote/fact and streak badge only need weeklyData (already loaded
+  // above) plus safe-default globals for anything not loaded yet - showing them now instead of
+  // after the entire remaining chain (Strength/Running setup, Habits, Pain Check, Training
+  // Pulse) is what actually fixes the "quote/fact takes forever" lag. Refined again at the very
+  // end once real plan/habit data is in, so nothing here is ever wrong for long.
+  try{
+    renderDailyMotivation();
+  }catch(e){ console.error('early renderDailyMotivation failed:', e); }
   try{
     await initPlan();
   }catch(e){
@@ -3869,6 +4053,12 @@ async function initHabits(){
       wrap.appendChild(banner);
     }
   }
+  // Early paint again: Home's Welcome card, This Week stats, Today's Plan, and Week Calendar
+  // all only need what initPlan() just finished loading - no reason to make them wait for
+  // Habits/Pain Check/Training Pulse too. Re-run once more at the very end regardless.
+  try{
+    renderHome();
+  }catch(e){ console.error('early renderHome failed:', e); }
   try{
     await initHabits();
   }catch(e){
@@ -3878,6 +4068,28 @@ async function initHabits(){
     await initPainCheck();
   }catch(e){
     console.error('initPainCheck failed:', e);
+  }
+  try{
+    pulseSettingsGlobal = await loadPulseSettings();
+    const pulseToggle = document.getElementById('pulseEnabledToggle');
+    const pulseNameInput = document.getElementById('pulseNameInput');
+    pulseToggle.checked = !!pulseSettingsGlobal.enabled;
+    pulseNameInput.value = pulseSettingsGlobal.name || '';
+    document.getElementById('savePulseSettingsBtn').addEventListener('click', async ()=>{
+      const enabled = pulseToggle.checked;
+      const name = pulseNameInput.value.trim().slice(0,24);
+      if(enabled && !name){ alert('Add a display name first \u2014 that\u2019s what shows to others instead of your passcode.'); return; }
+      if(enabled && !pulseSettingsGlobal.pulseId) pulseSettingsGlobal.pulseId = makePulseId();
+      pulseSettingsGlobal = { enabled, name, pulseId: pulseSettingsGlobal.pulseId || '' };
+      await savePulseSettings(pulseSettingsGlobal);
+      if(enabled) await updateTrainingPulseIfEnabled();
+      else if(pulseSettingsGlobal.pulseId) await pulseSharedDelete(pulseSettingsGlobal.pulseId);
+      alert(enabled ? 'You\u2019re now visible on Training Pulse.' : 'Training Pulse turned off \u2014 you\u2019re no longer visible to others.');
+      renderHome();
+    });
+    if(pulseSettingsGlobal.enabled) await updateTrainingPulseIfEnabled();
+  }catch(e){
+    console.error('Training Pulse init failed:', e);
   }
   try{
     renderHome();
