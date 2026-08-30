@@ -1739,7 +1739,12 @@ function signupFormIssue(email, password, confirmPassword){
 async function doSignUp(email, password, confirmPassword){
   const issue = signupFormIssue(email, password, confirmPassword);
   if(issue) return { ok:false, error:issue };
-  const { data, error } = await supabaseClient.auth.signUp({ email: email.trim(), password });
+  // emailRedirectTo pinned explicitly here (not left to Supabase's project-level Site URL
+  // default) - Site URL is easy to leave misconfigured, and this way the confirmation email
+  // link always points back at wherever this page is actually running, regardless of that
+  // setting.
+  const redirectTo = window.location.origin + window.location.pathname;
+  const { data, error } = await supabaseClient.auth.signUp({ email: email.trim(), password, options: { emailRedirectTo: redirectTo } });
   if(error) return { ok:false, error: error.message };
   const needsConfirmation = !data.session;
   return { ok:true, needsConfirmation };
