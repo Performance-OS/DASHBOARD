@@ -88,6 +88,10 @@
   .countdown .num{font-size:30px;font-weight:300;font-family:'IBM Plex Mono',monospace;color:#fff;line-height:1;position:relative;z-index:1;}
   .countdown-wrap{display:flex;flex-direction:column;align-items:center;}
   .countdown-wrap .lbl{font-size:8px;color:var(--text-dim);letter-spacing:0.2em;margin-top:8px;text-transform:uppercase;}
+  .header-mini-stats{display:flex;gap:26px;}
+  .header-mini-stat{text-align:center;}
+  .header-mini-stat .v{font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:300;color:#fff;letter-spacing:-0.02em;}
+  .header-mini-stat .k{font-size:9px;color:var(--text-dim);letter-spacing:0.1em;text-transform:uppercase;margin-top:5px;}
 
   nav{display:flex;gap:6px;margin-bottom:22px;width:100%;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;
     background:rgba(23,23,23,0.40);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
@@ -352,6 +356,16 @@
         <p id="subhead">Strava</p>
         <p id="momentumBadge" style="font-size:11px;color:var(--text-dim);margin:4px 0 0;display:none;">&#128293; <span id="streakFlameNum">0</span>-day streak</p>
       </div>
+      <div class="header-mini-stats">
+        <div class="header-mini-stat">
+          <div class="v" id="headerKmValue">--</div>
+          <div class="k">Km this week</div>
+        </div>
+        <div class="header-mini-stat">
+          <div class="v" id="headerStrengthValue">--</div>
+          <div class="k">Strength</div>
+        </div>
+      </div>
       <div class="countdown-wrap">
         <div class="countdown">
           <svg viewBox="0 0 112 112">
@@ -401,11 +415,6 @@
     <div class="card" id="homePulseCard" style="display:none;">
       <h2>Training Pulse</h2>
       <div id="homePulseBody"></div>
-    </div>
-
-    <div class="card">
-      <h2>This Week</h2>
-      <div class="stat-grid" id="homeStatGrid"></div>
     </div>
 
     <div class="card">
@@ -4234,15 +4243,8 @@ function renderHome(){
   });
   const strengthTotal = Object.keys(effectiveSchedule).length;
 
-  const habitPct = habitDayPct(todayStr);
-  const streak = computeHabitStreak();
-
-  document.getElementById('homeStatGrid').innerHTML = `
-    <div class="stat"><div class="v">${actualKm.toFixed(1)}${plannedKm!=null?`<span style="font-size:14px;color:var(--text-dim);">/${plannedKm.toFixed(1)}</span>`:''}</div><div class="k">Km this week${plannedKm!=null?' (actual/planned)':''}</div></div>
-    <div class="stat"><div class="v">${strengthDone}/${strengthTotal}</div><div class="k">Strength sessions</div></div>
-    <div class="stat"><div class="v">${habitPct}%</div><div class="k">Habits today</div></div>
-    <div class="stat"><div class="v">${streak}</div><div class="k">Day streak</div></div>
-  `;
+  document.getElementById('headerKmValue').innerHTML = `${actualKm.toFixed(1)}${plannedKm!=null?`<span style="font-size:12px;color:var(--text-dim);">/${plannedKm.toFixed(1)}</span>`:''}`;
+  document.getElementById('headerStrengthValue').textContent = `${strengthDone}/${strengthTotal}`;
 
   const todayPain = painLog[todayStr] || {};
   const flagEl = document.getElementById('homeBodyCheckFlag');
