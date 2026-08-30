@@ -1,16 +1,13 @@
 // Runs inside GitHub Actions on a schedule (see .github/workflows/strava-sync.yml).
-// Finds every passcode that has connected Strava (via the "Connect to Strava" button in the
+// Finds every account that has connected Strava (via the "Connect to Strava" button in the
 // dashboard, handled by the strava-oauth-callback Edge Function), refreshes each person's
 // access token, pulls their recent activities, and writes the result back under their own
-// passcode. One run covers everyone connected - no per-person secrets needed here anymore.
+// account. One run covers everyone connected - no per-person secrets needed here anymore.
 //
-// SECURITY FIX: this now uses SUPABASE_SERVICE_ROLE_KEY instead of SUPABASE_ANON_KEY. Once
-// kv_store's RLS is locked down (see lockdown-kv-store.sql), the anon key can no longer read
-// across every passcode's strava_auth rows the way this script needs to - only the service
-// role key (which bypasses RLS) can. The service role key must NEVER be hardcoded in this
-// file or the workflow YAML - it belongs only in a GitHub Actions secret (see the updated
-// strava-sync-workflow.yml, which now references secrets.SUPABASE_SERVICE_ROLE_KEY instead of
-// a literal key value).
+// Uses the service role key (not the anon key): this script has no live user session for any
+// of the accounts it's syncing - it's a trusted backend cron job, exactly the case the service
+// role key exists for. The anon key alone can no longer read/write user-scoped rows now that
+// RLS is the only thing protecting kv_store.
 
 const STRAVA_CLIENT_ID = process.env.STRAVA_CLIENT_ID;
 const STRAVA_CLIENT_SECRET = process.env.STRAVA_CLIENT_SECRET;
@@ -43,11 +40,11 @@ function fmtPace(secPerKm){
 
 async function fetchConnectedUsers(){
   const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/kv_store?key=eq.strava_auth&select=passcode,value`,
+    `${SUPABASE_URL}/rest/v1/kv_store?key=eq.strava_auth&select=user_id,value`,
     { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
   );
   if(!res.ok) throw new Error(`Fetching connected users failed: ${res.status} ${await res.text()}`);
-  return await res.json(); // [{passcode, value: '{"refresh_token":...}'}]
+  return await res.json(); // [{user_id, value: '{"refresh_token":...}'}]
 }
 
 async function getAccessToken(refreshToken){
@@ -125,7 +122,7 @@ function buildThisWeekActivities(activities){
     }));
 }
 
-async function writeSnapshot(passcode, weeklyData, thisWeekActivities){
+async function writeSnapshot(userId, weeklyData, thisWeekActivities){
   const value = JSON.stringify({
     weekly_data: weeklyData,
     this_week_activities: thisWeekActivities,
@@ -139,32 +136,32 @@ async function writeSnapshot(passcode, weeklyData, thisWeekActivities){
       'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
       'Prefer': 'resolution=merge-duplicates',
     },
-    body: JSON.stringify({ passcode, key: 'strava_snapshot', value, updated_at: new Date().toISOString() }),
+    body: JSON.stringify({ user_id: userId, key: 'strava_snapshot', value, updated_at: new Date().toISOString() }),
   });
   if(!res.ok) throw new Error(`Supabase write failed: ${res.status} ${await res.text()}`);
 }
 
-async function syncOneUser(passcode, refreshToken){
+async function syncOneUser(userId, refreshToken){
   const accessToken = await getAccessToken(refreshToken);
   const activities = await fetchActivities(accessToken);
   const weeklyData = buildWeeklyData(activities);
   const thisWeekActivities = buildThisWeekActivities(activities);
-  await writeSnapshot(passcode, weeklyData, thisWeekActivities);
+  await writeSnapshot(userId, weeklyData, thisWeekActivities);
   return activities.length;
 }
 
 (async function main(){
   console.log('Finding everyone who\u2019s connected Strava...');
   const users = await fetchConnectedUsers();
-  console.log(`Found ${users.length} connected passcode(s).`);
+  console.log(`Found ${users.length} connected account(s).`);
 
   let successCount = 0, failCount = 0;
   for(const user of users){
-    const label = user.passcode.slice(0, 3) + '***'; // don't print full passcodes to a public Actions log
+    const label = user.user_id.slice(0, 8) + '...'; // don't print full user ids to a public Actions log
     try{
       const auth = JSON.parse(user.value);
       if(!auth.refresh_token){ console.warn(`  ${label}: no refresh_token stored - skipping`); continue; }
-      const count = await syncOneUser(user.passcode, auth.refresh_token);
+      const count = await syncOneUser(user.user_id, auth.refresh_token);
       console.log(`  ${label}: synced OK (${count} activities fetched)`);
       successCount++;
     }catch(e){
