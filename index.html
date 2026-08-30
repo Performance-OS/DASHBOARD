@@ -246,6 +246,13 @@
   .home-chip{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:10px;font-family:'IBM Plex Mono',monospace;font-weight:600;color:#0D0F12;flex-shrink:0;}
   textarea#painNote{width:100%;padding:11px 13px;font-family:'Inter',sans-serif;font-size:13px;font-weight:300;resize:vertical;margin-top:2px;box-sizing:border-box;}
 
+  /* Auth gate (sign in / sign up / forgot / reset password) */
+  .auth-input{width:100%;box-sizing:border-box;padding:12px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:#fff;font-family:'IBM Plex Mono',monospace;font-size:14px;margin-bottom:12px;}
+  .auth-submit-btn{width:100%;padding:12px;border-radius:12px;border:1px solid rgba(224,122,74,0.55);background:rgba(224,122,74,0.18);color:#fff;font-family:'Inter',sans-serif;font-weight:500;font-size:13px;cursor:pointer;}
+  .auth-submit-btn:disabled{opacity:0.5;cursor:default;}
+  .auth-link{color:var(--accent-soft);text-decoration:underline;cursor:pointer;font-size:11px;}
+  .auth-switch-row{color:#A3A3A3;font-size:11px;margin:14px 0 0;line-height:1.5;}
+
   @media (max-width: 480px){
     .wrap{padding:18px 13px 64px;}
     header{padding:20px;}
@@ -264,14 +271,53 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-<div id="passcodeGate" style="display:none;position:fixed;inset:0;z-index:10000;background:#0D0F12;align-items:center;justify-content:center;padding:20px;">
+<div id="authGate" style="display:none;position:fixed;inset:0;z-index:10000;background:#0D0F12;align-items:center;justify-content:center;padding:20px;overflow-y:auto;">
   <div style="max-width:340px;width:100%;background:rgba(23,23,23,0.6);backdrop-filter:blur(24px);border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:28px;text-align:center;">
     <h1 style="font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;font-size:28px;margin:0 0 8px;color:#fff;">Send It</h1>
-    <p style="color:#A3A3A3;font-size:12px;margin:0 0 20px;line-height:1.5;">Enter a passcode to sync your training data across devices. Use the exact same one on every device you want synced together.</p>
-    <input type="password" id="passcodeInput" placeholder="Your passcode" autocomplete="off"
-      style="width:100%;box-sizing:border-box;padding:12px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:#fff;font-family:'IBM Plex Mono',monospace;font-size:14px;margin-bottom:12px;">
-    <button id="passcodeSubmit" style="width:100%;padding:12px;border-radius:12px;border:1px solid rgba(224,122,74,0.55);background:rgba(224,122,74,0.18);color:#fff;font-family:'Inter',sans-serif;font-weight:500;font-size:13px;cursor:pointer;">Continue</button>
-    <p style="color:#A3A3A3;font-size:10px;margin:16px 0 0;line-height:1.5;">This is a shared passcode, not a secure login &mdash; anyone who has it can see this data. Don't reuse a password you use elsewhere.</p>
+
+    <div id="authPanelSignIn">
+      <p style="color:#A3A3A3;font-size:12px;margin:0 0 20px;line-height:1.5;">Log in to sync your training data across devices.</p>
+      <input type="email" id="signInEmail" class="auth-input" placeholder="Email" autocomplete="email">
+      <input type="password" id="signInPassword" class="auth-input" placeholder="Password" autocomplete="current-password">
+      <button id="signInSubmit" class="auth-submit-btn">Log In</button>
+      <p class="auth-switch-row"><a class="auth-link" id="showForgotPassword">Forgot password?</a></p>
+      <p class="auth-switch-row">New here? <a class="auth-link" id="showSignUp">Create an account</a></p>
+    </div>
+
+    <div id="authPanelSignUp" style="display:none;">
+      <p style="color:#A3A3A3;font-size:12px;margin:0 0 20px;line-height:1.5;">Create an account to sync your training data across devices.</p>
+      <input type="email" id="signUpEmail" class="auth-input" placeholder="Email" autocomplete="email">
+      <input type="password" id="signUpPassword" class="auth-input" placeholder="Password (min 8 characters)" autocomplete="new-password">
+      <input type="password" id="signUpConfirmPassword" class="auth-input" placeholder="Confirm password" autocomplete="new-password">
+      <button id="signUpSubmit" class="auth-submit-btn">Create Account</button>
+      <p class="auth-switch-row">Already have an account? <a class="auth-link" id="showSignInFromSignUp">Log in</a></p>
+    </div>
+
+    <div id="authPanelCheckEmail" style="display:none;">
+      <p style="color:#A3A3A3;font-size:12px;margin:0 0 20px;line-height:1.5;">Check your inbox &mdash; we've sent a confirmation link to <span id="checkEmailAddress" style="color:#fff;"></span>. Click it, then come back here and log in.</p>
+      <button id="backToSignInFromCheckEmail" class="auth-submit-btn">Back to Log In</button>
+    </div>
+
+    <div id="authPanelForgotPassword" style="display:none;">
+      <p style="color:#A3A3A3;font-size:12px;margin:0 0 20px;line-height:1.5;">Enter your email and we'll send you a link to reset your password.</p>
+      <input type="email" id="forgotPasswordEmail" class="auth-input" placeholder="Email" autocomplete="email">
+      <button id="forgotPasswordSubmit" class="auth-submit-btn">Send Reset Link</button>
+      <p class="auth-switch-row"><a class="auth-link" id="backToSignInFromForgot">Back to Log In</a></p>
+    </div>
+
+    <div id="authPanelForgotSent" style="display:none;">
+      <p style="color:#A3A3A3;font-size:12px;margin:0 0 20px;line-height:1.5;">If that email has an account, a reset link is on its way &mdash; check your inbox.</p>
+      <button id="backToSignInFromForgotSent" class="auth-submit-btn">Back to Log In</button>
+    </div>
+
+    <div id="authPanelResetPassword" style="display:none;">
+      <p style="color:#A3A3A3;font-size:12px;margin:0 0 20px;line-height:1.5;">Choose a new password.</p>
+      <input type="password" id="resetNewPassword" class="auth-input" placeholder="New password (min 8 characters)" autocomplete="new-password">
+      <input type="password" id="resetConfirmPassword" class="auth-input" placeholder="Confirm new password" autocomplete="new-password">
+      <button id="resetPasswordSubmit" class="auth-submit-btn">Set New Password</button>
+    </div>
+
+    <p id="authErrorMsg" style="display:none;color:#D9534F;font-size:11px;margin-top:14px;line-height:1.5;"></p>
   </div>
 </div>
 <div style="position:fixed;inset:0;z-index:-10;pointer-events:none;background:radial-gradient(circle at center, rgba(218,118,52,0.15), transparent 60%);"></div>
@@ -329,7 +375,7 @@
   <div class="view active" id="view-home">
     <div class="card" id="homeWelcomeCard" style="display:none;border-color:var(--accent);">
       <h2>Welcome to Send It</h2>
-      <p class="note" style="margin-top:0;">Nothing's set up on this passcode yet. Head to the <b>Running Shit</b> tab to build a race plan, or <b>Gym Shit</b> to generate a strength program &mdash; either (or both) gets you started. Everything else on Home fills in once you have.</p>
+      <p class="note" style="margin-top:0;">Nothing's set up on this account yet. Head to the <b>Running Shit</b> tab to build a race plan, or <b>Gym Shit</b> to generate a strength program &mdash; either (or both) gets you started. Everything else on Home fills in once you have.</p>
     </div>
 
     <div class="card" id="homePulseCard" style="display:none;">
@@ -389,7 +435,7 @@
 
     <div class="card">
       <h2>Strava <span class="flag" id="stravaStatusFlag" style="background:rgba(163,163,163,0.14);color:#A3A3A3;border-color:rgba(163,163,163,0.35);">checking&hellip;</span></h2>
-      <p class="note" style="margin-top:0;">Connects to your own Strava account &mdash; your data stays under your own passcode, separate from anyone else using this dashboard.</p>
+      <p class="note" style="margin-top:0;">Connects to your own Strava account &mdash; your data stays under your own account, separate from anyone else using this dashboard.</p>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
         <button class="strava-btn" id="connectStravaBtn">Connect to Strava</button>
         <button class="feel-btn" id="disconnectStravaBtn" style="padding:9px 18px;display:none;color:var(--redline);">Disconnect</button>
@@ -401,7 +447,7 @@
   <div class="view" id="view-plan">
     <div class="card" id="planOnboardingCard" style="display:none;">
       <h2>Set Up Your Training Plan</h2>
-      <p class="note" style="margin-top:0;">No plan yet on this passcode. Answer a few quick questions and a full progressive plan gets generated for you &mdash; build phase, taper, race day, sized to however much time you give it.</p>
+      <p class="note" style="margin-top:0;">No plan yet on this account. Answer a few quick questions and a full progressive plan gets generated for you &mdash; build phase, taper, race day, sized to however much time you give it.</p>
       <button class="cta-btn" id="onboardingSetupBtn" style="margin-top:12px;">Set Up My Plan</button>
     </div>
 
@@ -756,7 +802,7 @@
   <div class="view" id="view-settings">
     <div class="card">
       <h2>Account</h2>
-      <p class="note" style="margin-top:0;">This device is signed in under a passcode &mdash; enter the exact same one on any other device to see the same data there, automatically.</p>
+      <p class="note" style="margin-top:0;" id="accountEmailNote"></p>
       <button class="feel-btn" id="changePasscodeBtn" style="padding:9px 18px;">Log Out</button>
     </div>
 
@@ -768,7 +814,7 @@
 
     <div class="card">
       <h2>Training Pulse</h2>
-      <p class="note" style="margin-top:0;">Opt in to show a display name, a weekly points score, and your streak to anyone else using this dashboard, and see the same for them on Home. Points come only from session counts (did you run, did you lift, was it a long run) &mdash; never distances, weights, or your actual plan/logs, and your passcode itself is never visible to anyone.</p>
+      <p class="note" style="margin-top:0;">Opt in to show a display name, a weekly points score, and your streak to anyone else using this dashboard, and see the same for them on Home. Points come only from session counts (did you run, did you lift, was it a long run) &mdash; never distances, weights, or your actual plan/logs.</p>
       <div class="field" style="margin-top:10px;">
         <label><input type="checkbox" id="pulseEnabledToggle"> Show me on Training Pulse</label>
       </div>
@@ -799,10 +845,10 @@
 <script>
 let weeklyData = {"weekly": [], "recent": []};
 // ^ Neutral by design: this only ever shows before a real Strava sync has happened for this
-// passcode (a brand new user who hasn't connected yet, or the rare case a sync fails). It used
+// account (a brand new user who hasn't connected yet, or the rare case a sync fails). It used
 // to be pre-filled with one specific person's real historical numbers, which looked like real
 // (but wrong) data to anyone else opening this for the first time. loadStravaSnapshot() below
-// overwrites this with whatever the GitHub Action last actually synced for this passcode.
+// overwrites this with whatever the GitHub Action last actually synced for this account.
 
 
 const DEFAULT_RACE_DATE = '2026-12-06';
@@ -819,8 +865,8 @@ const ZONE_OFFSETS_BY_GOAL_TYPE = {
   '5K':     { easy: 70, long: 85, tempo: 13,  interval: -6  },
 };
 let goalTypeGlobal = 'Marathon';
-// Returns null (not a default) if this passcode has genuinely never set a goal type -
-// that's how initPlan() tells "a brand new passcode" apart from "an existing Marathon plan".
+// Returns null (not a default) if this account has genuinely never set a goal type -
+// that's how initPlan() tells "a brand new account" apart from "an existing Marathon plan".
 async function loadGoalType(){ try{ const r = await storageGetSafe('goal_type'); return r ? r.value : null; }catch(e){ return null; } }
 async function saveGoalType(v){ await storageSetSafe('goal_type', v); }
 
@@ -899,17 +945,7 @@ function d(type, km, detail){ return {type, km, detail}; }
 const REST_DAY = null;
 
 /* ---------- Full plan generator (used when starting a new training block) ---------- */
-// Tuned defaults per goal type: how many weeks the template is designed for, how much of
-// that is taper, and roughly what peak weekly/long-run volume looks like for an intermediate
-// recreational runner. Not a substitute for a plan actually built together in chat, but a
-// real progressive structure (build -> deload -> taper -> race) rather than a blank table.
 const PLAN_TEMPLATES = {
-  // taperTable: one entry per taper week, ordered furthest-from-race first, ending with race
-  // week. weekKmPct is that week's volume as a fraction of peak weekly km. longKmPct is that
-  // week's long run as a fraction of peak long run km, or null if that week shouldn't have a
-  // dedicated long run at all (race week never does - see the safety pass in
-  // buildStructuredWeek, which also handles the case of a 1-week taper landing tighter than
-  // planned for a given race date).
   Marathon: { idealWeeks:18, taperWeeks:3, peakWeeklyKm:65, peakLongKm:32, fiveDayCapable:true,  qualityMix:['Tempo','Tempo','Interval'],
     taperTable: [ {weekKmPct:0.85, longKmPct:0.65}, {weekKmPct:0.70, longKmPct:0.50}, {weekKmPct:0.45, longKmPct:null} ] },
   Half:     { idealWeeks:12, taperWeeks:2, peakWeeklyKm:45, peakLongKm:18, fiveDayCapable:true,  qualityMix:['Tempo','Tempo','Interval'],
@@ -920,10 +956,6 @@ const PLAN_TEMPLATES = {
     taperTable: [ {weekKmPct:0.75, longKmPct:null} ] },
 };
 
-// Picks `count` run days spread across whichever days are actually available, rather than
-// assuming a fixed Tue/Thu/Sat pattern. Guarantees the preferred long-run day is included
-// (swapping one out if it wasn't already picked), and always returns the long day last -
-// buildBaseWeek/buildStructuredWeek rely on that ordering (last = long, first = quality day).
 function pickRunDays(availableDays, count, preferredLongDay){
   const pool = DAY_KEYS.filter(dk => availableDays.includes(dk));
   if(pool.length === 0) return ['Tue','Thu','Sat']; // safety net - shouldn't happen, form requires 3+ days
@@ -984,13 +1016,6 @@ function buildStructuredWeek(opts){
     days[longDay] = d('Long', longKm, 'Slightly easier than goal pace \u2014 builds endurance.');
   }
 
-  // Split the remaining volume across every non-long day evenly. When there's a quality
-  // session, it gets its own (smaller) allocation first and the rest splits across the
-  // plain easy days; when there isn't yet, the quality-day slot is just another easy day
-  // and joins that same even split - keeping this in one pool is what keeps the long run
-  // reliably the biggest single day, rather than two separate calculations double-booking it.
-  // When there's no dedicated long run this week (hasLongRun:false), the "long day" slot
-  // just joins the same easy pool as everything else instead of standing empty.
   const nonLongSlots = hasLongRun ? easyDays : [...easyDays, longDay];
   const effectiveLongKm = hasLongRun ? longKm : 0;
   if(qualityType){
@@ -1020,21 +1045,12 @@ function buildStructuredWeek(opts){
     days[raceDow] = d('Race', GOAL_TYPE_DISTANCES[goalType], 'Race day \u2014 go get it.');
   }
 
-  // Universal safety pass, independent of which nominal week this is - checks every day's
-  // ACTUAL calendar distance to race day. This is what actually prevents a long/tempo/interval
-  // session from landing dangerously close to (or the day before) race day: the isFinalRaceWeek
-  // block above only ever protects the literal final week, but a hard or long session
-  // scheduled in an EARLIER week can still land right next to race day if the calendar happens
-  // to line up that way (e.g. a Sunday long run the week before a Monday race). Research
-  // consistently puts the "easy/shakeout only" window at the final 4-7 days before race day
-  // across all distances, so anything inside 5 days gets downgraded, and the final 2 days drop
-  // to a genuine short shakeout regardless of what was originally planned.
   const raceDate = new Date(raceDateStr+'T00:00:00');
   DAY_KEYS.forEach((dk,i)=>{
     if(!days[dk] || days[dk].type==='Race' || days[dk].type==='Rest') return;
     const thisDate = new Date(addDays(monday, i)+'T00:00:00');
     const daysUntilRace = Math.round((raceDate - thisDate) / 86400000);
-    if(daysUntilRace <= 0) return; // race day itself or after - already handled separately / not relevant
+    if(daysUntilRace <= 0) return;
     if(daysUntilRace <= 2 && (days[dk].type==='Long' || days[dk].type==='Tempo' || days[dk].type==='Interval' || (days[dk].km||0) > 5)){
       days[dk] = d('Easy', 3, 'Very short shakeout \u2014 legs should feel fresh, not tired, with race day this close');
     } else if(daysUntilRace <= 5 && (days[dk].type==='Long' || days[dk].type==='Tempo' || days[dk].type==='Interval')){
@@ -1045,13 +1061,6 @@ function buildStructuredWeek(opts){
   return { monday, days };
 }
 
-// Generates a full progressive plan: build -> periodic deload -> taper -> race, sized to
-// whatever time is actually available, and shaped by a real athlete profile rather than a
-// one-size formula: experience level shifts the whole progression curve and how many days
-// get used per week; flagged injuries cap peak volume lower and stretch the easy base phase;
-// lifting concurrently trims peak volume slightly further; available days and a preferred
-// long-run day directly drive which days sessions land on. Starting volume is calibrated
-// from actual recent Strava mileage when there's enough of it to trust.
 function generateFullPlan(goalType, raceDateStr, profile){
   profile = profile || {};
   const availableDays = (profile.availableDays && profile.availableDays.length>=3) ? profile.availableDays : ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
@@ -1068,7 +1077,7 @@ function generateFullPlan(goalType, raceDateStr, profile){
   const peakWeeklyKm = Math.round(tmpl.peakWeeklyKm * peakKmMultiplier);
   const peakLongKm = Math.round(tmpl.peakLongKm * (injuryFlags.length>0 ? 0.9 : 1));
 
-  let easyBaseFraction = 0.3; // fraction of the build phase that stays pure-easy before quality sessions start
+  let easyBaseFraction = 0.3;
   if(experienceLevel === 'new') easyBaseFraction += 0.15;
   if(experienceLevel === 'experienced') easyBaseFraction -= 0.1;
   if(injuryFlags.length > 0) easyBaseFraction += 0.1;
@@ -1077,13 +1086,9 @@ function generateFullPlan(goalType, raceDateStr, profile){
   const mondayStart = mondayOnOrBefore(toLocalISO(new Date()));
   const raceMonday = mondayOnOrBefore(raceDateStr);
   const totalWeeks = Math.round((new Date(raceMonday) - new Date(mondayStart)) / (7*86400000)) + 1;
-  if(totalWeeks < 1) return generateBlankPlanWeeks(raceDateStr); // race date already passed / this week - nothing sensible to generate
+  if(totalWeeks < 1) return generateBlankPlanWeeks(raceDateStr);
 
   const structuredWeeks = Math.min(totalWeeks, tmpl.idealWeeks);
-  // Cap how much pure base-building gets generated before the structured phase starts - a
-  // race date years out shouldn't produce a 150+ week array. Anything beyond ~9-10 months of
-  // base phase is capped; the structured phase still gets anchored correctly to the real race
-  // date regardless (see below), so race day placement is never affected by this cap.
   const MAX_BASE_WEEKS = 40;
   const baseWeeks = Math.min(Math.max(0, totalWeeks - structuredWeeks), MAX_BASE_WEEKS);
 
@@ -1103,9 +1108,6 @@ function generateFullPlan(goalType, raceDateStr, profile){
     monday = addDays(monday, 7);
   }
 
-  // The structured phase is always anchored directly from the race date backward, not by
-  // continuing wherever the (possibly-capped) base phase left off - so if base weeks got
-  // capped above, there's an intentional gap in the middle rather than a wrong race date.
   monday = addDays(raceMonday, -7*(structuredWeeks-1));
 
   const buildWeeks = Math.max(0, structuredWeeks - tmpl.taperWeeks);
@@ -1115,11 +1117,6 @@ function generateFullPlan(goalType, raceDateStr, profile){
     const isFinalRaceWeek = (w === structuredWeeks-1);
     let weekKm, longKmPct;
     if(isTaper){
-      // Index from the END of the taper table (race week is always the last entry) rather
-      // than the start - if the available timeline is shorter than this distance's ideal
-      // taper length, this guarantees whatever weeks ARE available get the correct, more
-      // conservative treatment for how close they actually are to race day, instead of
-      // mistakenly starting at the table's easiest/earliest entry.
       const taperWeeksRemaining = structuredWeeks - w;
       const tableIdx = Math.max(0, tmpl.taperTable.length - taperWeeksRemaining);
       const taperEntry = tmpl.taperTable[tableIdx];
@@ -1128,13 +1125,13 @@ function generateFullPlan(goalType, raceDateStr, profile){
     } else {
       const buildFrac = buildWeeks<=1 ? 1 : w/(buildWeeks-1);
       weekKm = Math.round(startKm + (peakWeeklyKm - startKm) * buildFrac);
-      if((w+1)%4===0 && w!==buildWeeks-1) weekKm = Math.round(weekKm*0.75); // deload every 4th build week
-      longKmPct = null; // build-phase long run uses the normal weekKm-based ratio, not a taper-specific one
+      if((w+1)%4===0 && w!==buildWeeks-1) weekKm = Math.round(weekKm*0.75);
+      longKmPct = null;
     }
     const longKm = longKmPct !== null
       ? Math.round(peakLongKm * longKmPct)
       : Math.round(Math.min(peakLongKm, weekKm*0.36));
-    const hasLongRun = !(isTaper && longKmPct === null); // taper weeks with longKmPct:null (race week) get no dedicated long run at all
+    const hasLongRun = !(isTaper && longKmPct === null);
     const inEasyBasePhase = !isTaper && w < buildWeeks*easyBaseFraction;
     const qualityType = inEasyBasePhase ? null : tmpl.qualityMix[qualityIdx % tmpl.qualityMix.length];
     if(qualityType) qualityIdx++;
@@ -1145,12 +1142,6 @@ function generateFullPlan(goalType, raceDateStr, profile){
     monday = addDays(monday, 7);
   }
 
-  // The plan is Monday-aligned throughout (everything else in the app - schedules, the week
-  // calendar, weekly stats - keys off Monday-start weeks too), but if today isn't a Monday,
-  // that first generated week partially overlaps days already in the past. Rather than
-  // silently filling those with a normal training session (which would look like the plan
-  // expects something to have already happened before it existed), today is where real
-  // training actually starts - anything before it in week one is cleared to rest.
   if(weeks.length > 0){
     const todayStr = toLocalISO(new Date());
     const firstWeek = weeks[0];
@@ -1238,11 +1229,6 @@ async function loadSessionCompletion(){ try{ const r = await storageGetSafe('ses
 async function saveSessionCompletion(p){ await storageSetSafe('session_completion', JSON.stringify(p)); }
 
 function toLocalISO(d){ const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}`; }
-
-// Curated, not pulled from a live API - genuine, verifiable quotes from primary Stoic texts
-// (Meditations, Seneca's Letters, Epictetus's Discourses/Enchiridion), all public domain.
-// Deterministic by day of year, so it's the same quote for everyone on a given day rather
-// than random - and it'll always work, no dependency on a third-party quotes service.
 const DAILY_QUOTES = [
   { text:"You have power over your mind \u2014 not outside events. Realize this, and you will find strength.", author:"Marcus Aurelius" },
   { text:"The impediment to action advances action. What stands in the way becomes the way.", author:"Marcus Aurelius" },
@@ -1320,11 +1306,6 @@ function getDailyQuote(){
   const dayOfYear = Math.floor((now - startOfYear) / 86400000);
   return DAILY_QUOTES[dayOfYear % DAILY_QUOTES.length];
 }
-// Genuine sports-science/training facts, not the popular myths that circulate (lactic acid
-// causing soreness, static stretching preventing injury, etc.) - deliberately corrected a few
-// of those directly below. Same rotation mechanism as the quotes: deterministic by day of
-// year, no external dependency, no accuracy risk from misattribution since these aren't
-// quotes tied to a person.
 const TRAINING_FACTS = [
   "Muscle soreness after a hard workout (DOMS) isn't caused by lactic acid buildup, despite the popular myth \u2014 it's mainly linked to microscopic damage from eccentric (lengthening) muscle contractions.",
   "Most strength gains in your first few months of resistance training come from your nervous system getting better at recruiting muscle fibers, not from the fibers actually growing yet.",
@@ -1356,10 +1337,6 @@ function getDailyFact(){
   const dayOfYear = Math.floor((now - startOfYear) / 86400000);
   return TRAINING_FACTS[dayOfYear % TRAINING_FACTS.length];
 }
-// Small curated pools for the days where a distinct tone genuinely adds something - not every
-// session type gets one (Easy/Tempo/Interval days just use the normal quote rotation), only
-// the handful where "today" is meaningfully different in character. Deterministic by day of
-// year within its own pool, same mechanism as the quotes/facts.
 const CONTEXT_MESSAGES = {
   Race: [
     "This is the day the training was for. Trust it.",
@@ -1371,13 +1348,7 @@ const CONTEXT_MESSAGES = {
     "Patience is the whole point of this one. Let it be slow.",
     "This is the session that builds what a fast finish needs later.",
   ],
-  // Rest deliberately has no entry here (unlike Race/Long) - it recurs multiple times most
-  // weeks, and always overriding the quote/fact rotation on those days left the Stoic quotes
-  // getting crowded out for anyone training consistently. Rest days now just get the normal
-  // quote/fact rotation like Easy/Tempo/Interval days do.
 };
-// Reads today's planned session the same way Home's "Today's Plan" card does, so this can
-// never disagree with what's already shown there. Returns null if there's no plan set up yet.
 function getTodaySessionType(){
   try{
     const todayStr = toLocalISO(new Date());
@@ -1398,15 +1369,6 @@ function getContextMessage(){
   const dayOfYear = Math.floor((now - new Date(now.getFullYear(),0,0)) / 86400000);
   return pool[dayOfYear % pool.length];
 }
-// A real, honest reflection from actual training history - not curated content, so there's
-// nothing to get wrong or misattribute. Handles the empty-Strava-history case gracefully
-// rather than showing a confusing zero.
-// A lifetime cumulative total barely changes day to day and stops meaning much once it's
-// large - not genuinely useful to see the same-ish number every morning. This compares two
-// fully-completed weeks against each other instead, which actually changes weekly and gives
-// real signal on trajectory. Deliberately never compares against the CURRENT in-progress
-// week - that would unfairly show "behind" every Monday/Tuesday even when on the same pace,
-// since only part of this week has happened yet.
 function getMomentumText(){
   if(weeklyData.weekly.length === 0) return "Connect Strava and log some runs to start tracking your progress here.";
   const currentMonday = getWeekDates()[0];
@@ -1422,9 +1384,6 @@ function getMomentumText(){
   if(diff > 0) return `Last week you ran ${diff.toFixed(1)}km more than the week before \u2014 ${lastWeek.km.toFixed(1)}km total.`;
   return `Last week was ${Math.abs(diff).toFixed(1)}km lighter than the week before \u2014 ${lastWeek.km.toFixed(1)}km total.`;
 }
-// Populates the quote/fact/momentum card - called once marathonPlanGlobal and weeklyData
-// have both actually loaded (alongside renderHome(), not at the top of the init sequence),
-// since context-awareness and the momentum reflection both depend on that real data.
 function renderDailyMotivation(){
   const quoteBlock = document.getElementById('dailyQuoteBlock');
   const factBlock = document.getElementById('dailyFactBlock');
@@ -1433,14 +1392,11 @@ function renderDailyMotivation(){
   const dayOfYear = Math.floor((now - new Date(now.getFullYear(),0,0)) / 86400000);
 
   if(ctx){
-    // A real context match (Race/Long day) always wins over the flat rotation - it's more
-    // specifically relevant than either a generic quote or fact would be today.
     quoteBlock.style.display = 'block';
     factBlock.style.display = 'none';
     document.getElementById('dailyQuoteText').textContent = `\u201c${ctx}\u201d`;
     document.getElementById('dailyQuoteAuthor').textContent = "Today\u2019s focus";
   } else if(dayOfYear % 7 < 5){
-    // 5:2 ratio - quotes most days, a training fact for variety roughly 2 days out of 7.
     quoteBlock.style.display = 'block';
     factBlock.style.display = 'none';
     const q = getDailyQuote();
@@ -1499,12 +1455,9 @@ let painTrendChartInstance = null;
 let liftHistoryChartInstance = null;
 let strengthLogGlobal = {};
 let strengthGoalsGlobal = {};
-let strengthProfileGlobal = null; // null = no explicit Strength setup done yet on this passcode
-let isBrandNewRunningGlobal = true; // set explicitly in initPlan() once goal_type is actually checked
-let planProfileGlobal = null; // null = the running plan was never set up through the intake form (e.g. still on the file's own default)
-// Body Check only tracks knee and calf specifically - so its relevance is tied to whether
-// EITHER intake actually flagged one of those, not just "any injury exists." Strength's
-// injury list doesn't include "calf" as an option, so only "knee" is checked there.
+let strengthProfileGlobal = null;
+let isBrandNewRunningGlobal = true;
+let planProfileGlobal = null;
 let bodyCheckDismissedGlobal = false;
 async function loadBodyCheckDismissed(){ try{ const r = await storageGetSafe('body_check_dismissed'); return r ? r.value === 'true' : false; }catch(e){ return false; } }
 async function saveBodyCheckDismissed(val){ await storageSetSafe('body_check_dismissed', val ? 'true' : 'false'); }
@@ -1514,16 +1467,11 @@ function shouldShowBodyCheck(){
   const strengthFlags = (strengthProfileGlobal && strengthProfileGlobal.injuryFlags) || [];
   return runFlags.includes('knee') || runFlags.includes('calf') || strengthFlags.includes('knee');
 }
-// Whether there's a genuine underlying reason to show Body Check, independent of whether it's
-// currently dismissed - used to decide whether the "show it again" control in Settings should
-// even appear (no point offering to restore something with no injury flag behind it at all).
 function hasBodyCheckReason(){
   const runFlags = (planProfileGlobal && planProfileGlobal.injuryFlags) || [];
   const strengthFlags = (strengthProfileGlobal && strengthProfileGlobal.injuryFlags) || [];
   return runFlags.includes('knee') || runFlags.includes('calf') || strengthFlags.includes('knee');
 }
-// Populated by initPlan() so the Home view can read the marathon plan, session
-// completions, and pace zones without duplicating that loading logic.
 let marathonPlanGlobal = [];
 let sessionCompletionGlobal = {};
 let currentZonesGlobal = null;
@@ -1606,11 +1554,8 @@ function renderWeekCalendar(activities){
 }
 
 let thisWeekActivities = [];
-let stravaSyncedAt = null; // set by loadStravaSnapshot() if a real synced timestamp is found
+let stravaSyncedAt = null;
 
-// Reads whatever the GitHub Action last wrote to Supabase (see the strava-sync workflow) and
-// overwrites the hardcoded fallback data above with it. If nothing's synced yet (Action hasn't
-// run, or hasn't been set up), the fallback data quietly stays in place - nothing breaks.
 async function loadStravaSnapshot(){
   try{
     const r = await storageGetSafe('strava_snapshot');
@@ -1624,6 +1569,16 @@ async function loadStravaSnapshot(){
 
 const STRAVA_MANUAL_SYNC_URL = 'https://mefuldlvyaorzulrnnyx.supabase.co/functions/v1/strava-manual-sync';
 let stravaRefreshCooldownUntil = 0;
+// Returns the current session's real access token (a signed JWT proving who's actually
+// logged in), or null if there's no session. Used instead of the anon key alone when calling
+// strava-manual-sync, so that function can verify the request is genuinely coming from the
+// account it claims to be - the anon key alone never proved that.
+async function getUserAccessToken(){
+  try{
+    const { data } = await supabaseClient.auth.getSession();
+    return data.session ? data.session.access_token : null;
+  }catch(e){ return null; }
+}
 async function manualStravaRefresh(){
   const btn = document.getElementById('refreshBtn');
   const txt = document.getElementById('statusText');
@@ -1636,10 +1591,12 @@ async function manualStravaRefresh(){
   btn.disabled = true;
   txt.textContent = 'Syncing with Strava\u2026';
   try{
+    const accessToken = await getUserAccessToken();
+    if(!accessToken){ txt.textContent = 'Not logged in \u2014 refresh the page and log back in.'; btn.disabled = false; return; }
     const res = await fetch(STRAVA_MANUAL_SYNC_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
-      body: JSON.stringify({ passcode: ACTIVE_PASSCODE }),
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+      body: JSON.stringify({ user_id: CURRENT_USER_ID }),
     });
     const result = await res.json();
     if(result.error === 'not_connected'){
@@ -1660,7 +1617,7 @@ async function manualStravaRefresh(){
     txt.textContent = 'Refresh didn\u2019t go through \u2014 try again shortly.';
   }finally{
     btn.disabled = false;
-    stravaRefreshCooldownUntil = Date.now() + 30000; // 30s cooldown - plenty for casual use, protects against accidental rate-limit hammering
+    stravaRefreshCooldownUntil = Date.now() + 30000;
   }
 }
 
@@ -1682,7 +1639,7 @@ function showView(viewName){
   document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   const navBtn = document.querySelector(`nav button[data-view="${viewName}"]`);
-  if(navBtn) navBtn.classList.add('active'); // Settings has no matching nav button, so none highlights - correct, it's not one of the four primary tabs
+  if(navBtn) navBtn.classList.add('active');
   const view = document.getElementById('view-'+viewName);
   if(view) view.classList.add('active');
 }
@@ -1701,23 +1658,20 @@ const supabaseClient = (typeof window.supabase !== 'undefined' && SUPABASE_URL.s
   ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
   : null;
 
-// ---- Strava connect: one shared app registration (Client ID is not secret - Strava's own
-// docs treat it as public, only the Client Secret needs to stay hidden, which is why that
-// lives in the Supabase Edge Function instead of here). Each person who clicks "Connect to
-// Strava" authorizes their own account; the callback function stores the result under
-// whichever passcode initiated it, so everyone's data stays separate automatically.
+// ---- Strava connect: one shared app registration (Client ID is not secret). The OAuth
+// "state" param now carries the logged-in account's real user id instead of a passcode - the
+// callback function stores the result under that user_id, so everyone's data stays separate
+// automatically, tied to a real account rather than a typed string.
 const STRAVA_CLIENT_ID = '256060';
 const STRAVA_OAUTH_CALLBACK_URL = 'https://mefuldlvyaorzulrnnyx.supabase.co/functions/v1/strava-oauth-callback';
 
-// ---- Push notifications: requires sw.js deployed at the repo root, a VAPID key pair (see
-// send-push-notification.ts for how to generate one), and the PUBLIC half pasted below - the
-// public key is safe to expose, only the private half (kept in the Edge Function) is secret.
+// ---- Push notifications ----
 const PUSH_NOTIFY_URL = 'https://mefuldlvyaorzulrnnyx.supabase.co/functions/v1/send-push-notification';
 const PUSH_VAPID_PUBLIC_KEY = ''; // paste your generated VAPID public key here
 
 function connectStrava(){
   const redirectUri = encodeURIComponent(STRAVA_OAUTH_CALLBACK_URL);
-  const state = encodeURIComponent(ACTIVE_PASSCODE);
+  const state = encodeURIComponent(CURRENT_USER_ID);
   const url = `https://www.strava.com/oauth/authorize?client_id=${STRAVA_CLIENT_ID}&redirect_uri=${redirectUri}&response_type=code&approval_prompt=auto&scope=activity:read_all&state=${state}`;
   window.location.href = url;
 }
@@ -1747,8 +1701,6 @@ async function refreshStravaStatus(){
     }
   }catch(e){ console.warn('Could not check Strava connection status:', e); }
 }
-// Strava redirects back here with ?strava=connected or ?strava=error after the OAuth dance -
-// show a quick confirmation, then clean the URL so refreshing doesn't re-trigger the message.
 function handleStravaRedirectResult(){
   const params = new URLSearchParams(window.location.search);
   const result = params.get('strava');
@@ -1760,74 +1712,192 @@ function handleStravaRedirectResult(){
   window.history.replaceState({}, '', url.toString());
 }
 
-// ---- Passcode gate: a lightweight (not secure) way to give the same person's data the
-// same "row" across devices, without building real accounts/login. Remembered per-browser
-// via localStorage so it's only entered once per device, not every visit.
-const PASSCODE_STORAGE_KEY = 'splits_sync_passcode';
-let ACTIVE_PASSCODE = localStorage.getItem(PASSCODE_STORAGE_KEY) || null;
-function storageAvailable(){ return !!supabaseClient && !!ACTIVE_PASSCODE; }
-// Checks whether ANYTHING has ever been saved under a given passcode. Used to catch typos:
-// a mistyped passcode isn't rejected (there's no "account" to check it against - any text is
-// technically valid), so this is the only real signal available that something might be off.
-async function passcodeHasExistingData(passcode){
-  if(!supabaseClient || !SUPABASE_URL.startsWith('http')) return true; // can't check yet - don't block on it
-  try{
-    const res = await fetch(KV_STORE_PROXY_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
-      body: JSON.stringify({ action: 'exists', passcode }),
-    });
-    const result = await res.json();
-    if(!res.ok || result.error) return true; // fail open - a check failure shouldn't block getting in
-    return !!result.exists;
-  }catch(e){ return true; }
+/* =========================================================================================
+   AUTH GATE - real Supabase Auth (sign up / sign in / sign out / forgot & reset password),
+   replacing the old shared-passcode gate. CURRENT_USER_ID is the account's real id, used
+   everywhere the old ACTIVE_PASSCODE was - but unlike a passcode, nobody can fake it: it comes
+   from a verified, signed session, not a string typed into a box.
+   ========================================================================================= */
+
+let CURRENT_USER_ID = null;
+function storageAvailable(){ return !!supabaseClient && !!CURRENT_USER_ID; }
+
+function isValidEmail(email){
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim());
 }
-function initPasscodeGate(){
+function passwordIssue(password){
+  if(!password || password.length < 8) return 'Password needs to be at least 8 characters.';
+  return null;
+}
+function signupFormIssue(email, password, confirmPassword){
+  if(!isValidEmail(email)) return 'Enter a valid email address.';
+  const pwIssue = passwordIssue(password);
+  if(pwIssue) return pwIssue;
+  if(password !== confirmPassword) return 'Passwords don\u2019t match.';
+  return null;
+}
+async function doSignUp(email, password, confirmPassword){
+  const issue = signupFormIssue(email, password, confirmPassword);
+  if(issue) return { ok:false, error:issue };
+  const { data, error } = await supabaseClient.auth.signUp({ email: email.trim(), password });
+  if(error) return { ok:false, error: error.message };
+  const needsConfirmation = !data.session;
+  return { ok:true, needsConfirmation };
+}
+async function doSignIn(email, password){
+  if(!isValidEmail(email)) return { ok:false, error:'Enter a valid email address.' };
+  if(!password) return { ok:false, error:'Enter your password.' };
+  const { data, error } = await supabaseClient.auth.signInWithPassword({ email: email.trim(), password });
+  if(error){
+    if(/email not confirmed/i.test(error.message)) return { ok:false, error:'Check your inbox and confirm your email before logging in.' };
+    return { ok:false, error:'Incorrect email or password.' };
+  }
+  return { ok:true, userId: data.user.id, email: data.user.email };
+}
+async function doSignOut(){
+  const { error } = await supabaseClient.auth.signOut();
+  return error ? { ok:false, error:error.message } : { ok:true };
+}
+async function doRequestPasswordReset(email){
+  if(!isValidEmail(email)) return { ok:false, error:'Enter a valid email address.' };
+  const redirectTo = window.location.origin + window.location.pathname;
+  const { error } = await supabaseClient.auth.resetPasswordForEmail(email.trim(), { redirectTo });
+  if(error) return { ok:false, error:'Something went wrong sending that email \u2014 try again shortly.' };
+  return { ok:true };
+}
+async function doCompletePasswordReset(newPassword, confirmPassword){
+  const issue = passwordIssue(newPassword);
+  if(issue) return { ok:false, error:issue };
+  if(newPassword !== confirmPassword) return { ok:false, error:'Passwords don\u2019t match.' };
+  const { error } = await supabaseClient.auth.updateUser({ password: newPassword });
+  if(error) return { ok:false, error: error.message };
+  return { ok:true };
+}
+function isPasswordRecoveryRedirect(url){
+  const hash = new URL(url).hash || '';
+  return /type=recovery/.test(hash);
+}
+async function getExistingSession(){
+  const { data, error } = await supabaseClient.auth.getSession();
+  if(error || !data.session) return null;
+  return data.session;
+}
+
+function showAuthPanel(name){
+  ['SignIn','SignUp','CheckEmail','ForgotPassword','ForgotSent','ResetPassword'].forEach(p=>{
+    const el = document.getElementById('authPanel'+p);
+    if(el) el.style.display = (p.toLowerCase() === name.toLowerCase()) ? 'block' : 'none';
+  });
+  const errEl = document.getElementById('authErrorMsg');
+  errEl.style.display = 'none';
+  errEl.textContent = '';
+}
+function showAuthError(msg){
+  const errEl = document.getElementById('authErrorMsg');
+  errEl.textContent = msg;
+  errEl.style.display = 'block';
+}
+function setAuthBtnBusy(btnId, busy, busyLabel, normalLabel){
+  const btn = document.getElementById(btnId);
+  btn.disabled = busy;
+  btn.textContent = busy ? busyLabel : normalLabel;
+}
+
+function initAuthGate(){
   return new Promise((resolve)=>{
-    if(ACTIVE_PASSCODE){ resolve(); return; }
-    const gate = document.getElementById('passcodeGate');
-    gate.style.display = 'flex';
-    const input = document.getElementById('passcodeInput');
-    const submit = document.getElementById('passcodeSubmit');
-    const go = async () => {
-      const val = input.value.trim();
-      if(!val){ input.focus(); return; }
-      submit.disabled = true;
-      submit.textContent = 'Checking\u2026';
-      const hasData = await passcodeHasExistingData(val);
-      submit.disabled = false;
-      submit.textContent = 'Continue';
-      if(!hasData){
-        const proceed = confirm(
-          'No existing data found under this passcode.\n\n' +
-          'If this is genuinely a first-time setup (a new device, or someone else using this dashboard for the first time), that\u2019s expected \u2014 press OK to continue.\n\n' +
-          'If you meant to match a device you\u2019ve already set up, press Cancel and check you typed it exactly the same as before.'
-        );
-        if(!proceed){ input.focus(); input.select(); return; }
-      }
-      ACTIVE_PASSCODE = val;
-      localStorage.setItem(PASSCODE_STORAGE_KEY, val);
+    const gate = document.getElementById('authGate');
+
+    const finish = (userId, email) => {
+      CURRENT_USER_ID = userId;
+      const emailNote = document.getElementById('accountEmailNote');
+      if(emailNote) emailNote.textContent = email ? `Logged in as ${email}.` : 'Logged in.';
       gate.style.display = 'none';
       resolve();
     };
-    submit.addEventListener('click', go);
-    input.addEventListener('keydown', (e)=>{ if(e.key==='Enter') go(); });
-    setTimeout(()=> input.focus(), 50);
+
+    // Wire every panel's buttons up front - cheap, and simpler than wiring conditionally.
+    document.getElementById('showSignUp').addEventListener('click', ()=> showAuthPanel('signup'));
+    document.getElementById('showSignInFromSignUp').addEventListener('click', ()=> showAuthPanel('signin'));
+    document.getElementById('showForgotPassword').addEventListener('click', ()=> showAuthPanel('forgotpassword'));
+    document.getElementById('backToSignInFromForgot').addEventListener('click', ()=> showAuthPanel('signin'));
+    document.getElementById('backToSignInFromForgotSent').addEventListener('click', ()=> showAuthPanel('signin'));
+    document.getElementById('backToSignInFromCheckEmail').addEventListener('click', ()=> showAuthPanel('signin'));
+
+    document.getElementById('signInSubmit').addEventListener('click', async ()=>{
+      setAuthBtnBusy('signInSubmit', true, 'Logging in\u2026', 'Log In');
+      const res = await doSignIn(document.getElementById('signInEmail').value, document.getElementById('signInPassword').value);
+      setAuthBtnBusy('signInSubmit', false, 'Logging in\u2026', 'Log In');
+      if(!res.ok){ showAuthError(res.error); return; }
+      finish(res.userId, res.email);
+    });
+
+    document.getElementById('signUpSubmit').addEventListener('click', async ()=>{
+      const email = document.getElementById('signUpEmail').value;
+      setAuthBtnBusy('signUpSubmit', true, 'Creating account\u2026', 'Create Account');
+      const res = await doSignUp(email, document.getElementById('signUpPassword').value, document.getElementById('signUpConfirmPassword').value);
+      setAuthBtnBusy('signUpSubmit', false, 'Creating account\u2026', 'Create Account');
+      if(!res.ok){ showAuthError(res.error); return; }
+      if(res.needsConfirmation){
+        document.getElementById('checkEmailAddress').textContent = email.trim();
+        showAuthPanel('checkemail');
+      } else {
+        // Only reachable if email confirmation is ever turned off at the project level -
+        // signUp() already returns an active session in that case, so log straight in.
+        const session = await getExistingSession();
+        if(session) finish(session.user.id, session.user.email);
+      }
+    });
+
+    document.getElementById('forgotPasswordSubmit').addEventListener('click', async ()=>{
+      setAuthBtnBusy('forgotPasswordSubmit', true, 'Sending\u2026', 'Send Reset Link');
+      const res = await doRequestPasswordReset(document.getElementById('forgotPasswordEmail').value);
+      setAuthBtnBusy('forgotPasswordSubmit', false, 'Sending\u2026', 'Send Reset Link');
+      if(!res.ok){ showAuthError(res.error); return; }
+      showAuthPanel('forgotsent');
+    });
+
+    document.getElementById('resetPasswordSubmit').addEventListener('click', async ()=>{
+      setAuthBtnBusy('resetPasswordSubmit', true, 'Saving\u2026', 'Set New Password');
+      const res = await doCompletePasswordReset(document.getElementById('resetNewPassword').value, document.getElementById('resetConfirmPassword').value);
+      setAuthBtnBusy('resetPasswordSubmit', false, 'Saving\u2026', 'Set New Password');
+      if(!res.ok){ showAuthError(res.error); return; }
+      // Clean the recovery params off the URL now that the password's actually been changed,
+      // so refreshing later doesn't re-trigger the reset-password panel.
+      const url = new URL(window.location.href);
+      url.hash = '';
+      window.history.replaceState({}, '', url.toString());
+      const session = await getExistingSession();
+      if(session) finish(session.user.id, session.user.email);
+      else { showAuthPanel('signin'); }
+    });
+
+    (async ()=>{
+      // Arriving via a password-reset email link always shows the reset-password panel,
+      // checked before the normal "already logged in" case - Supabase's own URL-detection
+      // already establishes a temporary session for this link, but that session should never
+      // be treated as a normal login; it exists only to authorize setting a new password.
+      if(isPasswordRecoveryRedirect(window.location.href)){
+        gate.style.display = 'flex';
+        showAuthPanel('resetpassword');
+        return;
+      }
+      const session = await getExistingSession();
+      if(session){ finish(session.user.id, session.user.email); return; }
+      gate.style.display = 'flex';
+      showAuthPanel('signin');
+    })();
   });
 }
-// Lets someone log out and switch to a different passcode later (e.g. typo'd it, wants a
-// fresh/test space, or is handing the device to someone else) without needing to dig into
-// browser settings to clear storage themselves. Nothing under either passcode is deleted -
-// this only forgets which one THIS device currently points at.
-function changeSyncPasscode(){
-  if(!confirm('This logs you out on this device. You\u2019ll need to enter a passcode again next time \u2014 your real one to come back to this data, or a new one for a fresh space. Nothing is deleted. Continue?')) return;
-  localStorage.removeItem(PASSCODE_STORAGE_KEY);
+
+async function handleLogout(){
+  if(!confirm('Log out of Send It on this device?')) return;
+  await doSignOut();
   location.reload();
 }
 
 let noStorageNoticeShown = false;
 
-let __pendingSaveKeys = new Map(); // key -> most recent value still waiting to be confirmed saved
+let __pendingSaveKeys = new Map();
 function showStorageWarning(msg, persistent){
   let el = document.getElementById('storageWarningBanner');
   if(!el){
@@ -1855,22 +1925,17 @@ function updatePendingIndicator(){
     hideStorageWarning();
   }
 }
-// If the tab is closed/refreshed while something still hasn't reached storage, the browser's
-// native "leave site?" prompt is the only real way to stop that from silently vanishing -
-// this is what closes the gap that caused a Body Check entry to be lost after a failed save.
 window.addEventListener('beforeunload', (e)=>{
   if(__pendingSaveKeys.size > 0){ e.preventDefault(); e.returnValue = ''; return ''; }
 });
 function retryPendingSave(key, attemptsLeft){
-  if(attemptsLeft === undefined) attemptsLeft = 30; // every 15s, so up to ~7.5 minutes of background retries
+  if(attemptsLeft === undefined) attemptsLeft = 30;
   setTimeout(async ()=>{
-    if(!__pendingSaveKeys.has(key)) return; // a newer write already resolved this key
-    const value = __pendingSaveKeys.get(key); // always re-read the latest value, not a stale snapshot
-    // Routed through the same queue as everything else - a direct Supabase call here could
-    // otherwise land at the exact moment a newly-queued operation is also running.
+    if(!__pendingSaveKeys.has(key)) return;
+    const value = __pendingSaveKeys.get(key);
     const ok = await runQueued(async () => {
       try{
-        await kvProxyCall('set', key, value);
+        await directSet(CURRENT_USER_ID, key, value);
         return true;
       }catch(e){ return false; }
     });
@@ -1884,8 +1949,6 @@ function retryPendingSave(key, attemptsLeft){
     }
   }, 15000);
 }
-// Every interaction with storage - set, get, AND delete - funnels through this one queue, so
-// nothing can ever fire two requests at once against the same passcode's data.
 function runQueued(taskFn){
   const scheduled = __storageQueue.then(taskFn, taskFn);
   const advance = () => new Promise(res=>setTimeout(res, 350));
@@ -1893,22 +1956,30 @@ function runQueued(taskFn){
   return scheduled;
 }
 
-// The browser no longer talks to kv_store directly for real passcode data - it goes through
-// this Edge Function instead, which uses the service role key server-side (never exposed to a
-// browser) and is the only thing that can still read/write arbitrary passcodes now that
-// kv_store's RLS has been locked down to the anon key. See lockdown-kv-store.sql for the
-// database side of this fix. Training Pulse (the one reserved shared passcode) deliberately
-// stays OFF this proxy and on the direct anon-key path - see pulseSharedSet/GetAll/Delete below.
-const KV_STORE_PROXY_URL = 'https://mefuldlvyaorzulrnnyx.supabase.co/functions/v1/kv-store-proxy';
-async function kvProxyCall(action, key, value){
-  const res = await fetch(KV_STORE_PROXY_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
-    body: JSON.stringify({ action, passcode: ACTIVE_PASSCODE, key, value }),
-  });
-  const result = await res.json();
-  if(!res.ok || result.error) throw new Error(result.error || `HTTP ${res.status}`);
-  return result;
+// ---- Direct, RLS-protected storage (replaces kv-store-proxy) ----
+// The browser now talks straight to the kv_store table using the anon key plus the logged-in
+// person's session - Postgres itself enforces "you only see rows where user_id = you" via the
+// RLS policies from the Phase 1/1b migrations. No server-side proxy needed for this anymore.
+async function directGet(userId, key){
+  const { data, error } = await supabaseClient
+    .from('kv_store').select('value')
+    .eq('user_id', userId).eq('key', key).maybeSingle();
+  if(error) throw error;
+  return data ? { value: data.value } : null;
+}
+async function directSet(userId, key, value){
+  const { error } = await supabaseClient.from('kv_store').upsert(
+    { user_id: userId, key, value, updated_at: new Date().toISOString() },
+    { onConflict: 'user_id,key' }
+  );
+  if(error) throw error;
+  return true;
+}
+async function directDelete(userId, key){
+  const { error } = await supabaseClient.from('kv_store').delete()
+    .eq('user_id', userId).eq('key', key);
+  if(error) throw error;
+  return true;
 }
 
 async function storageSetSafe(key, value){
@@ -1916,15 +1987,15 @@ async function storageSetSafe(key, value){
     if(!storageAvailable()){
       if(!noStorageNoticeShown){
         noStorageNoticeShown = true;
-        console.warn('Supabase isn\u2019t configured (or no passcode is set), so nothing will sync between devices - this change only applies to this browser tab for now.');
+        console.warn('Not logged in yet, so nothing will sync between devices - this change only applies to this browser tab for now.');
         showStorageWarning('Not connected to sync storage yet \u2014 this change only applies to this tab.');
       }
-      return true; // nothing to retry - the change still applies for this browser tab/session
+      return true;
     }
-    const delays = [500, 1200, 2500]; // three retries with increasing backoff
+    const delays = [500, 1200, 2500];
     for(let attempt=0; attempt<=delays.length; attempt++){
       try{
-        await kvProxyCall('set', key, value);
+        await directSet(CURRENT_USER_ID, key, value);
         if(__pendingSaveKeys.get(key) === value) __pendingSaveKeys.delete(key);
         updatePendingIndicator();
         return true;
@@ -1944,16 +2015,9 @@ async function storageSetSafe(key, value){
 }
 
 async function storageGetSafe(key){
-  // Deliberately NOT routed through runQueued/__storageQueue - that queue's 350ms-per-operation
-  // spacing exists to protect against flooding Supabase with rapid duplicate WRITES, not reads.
-  // Serializing every read through it too meant 20+ page-load reads took 7+ seconds of pure
-  // artificial delay before any actual network time. Reads can safely run concurrently.
   if(!storageAvailable()) return null;
   try{
-    // The proxy returns {value: null} for a key that doesn't exist yet, rather than an error -
-    // that's the normal, expected case for anything not touched yet.
-    const result = await kvProxyCall('get', key);
-    return result.value !== null && result.value !== undefined ? { value: result.value } : null;
+    return await directGet(CURRENT_USER_ID, key);
   }catch(e){
     console.warn('Storage read failed:', key, e);
     return null;
@@ -1964,7 +2028,7 @@ async function storageDeleteSafe(key){
   return runQueued(async () => {
     if(!storageAvailable()) return true;
     try{
-      await kvProxyCall('delete', key);
+      await directDelete(CURRENT_USER_ID, key);
       return true;
     }catch(e){
       console.warn('Storage delete failed:', key, e);
@@ -1973,17 +2037,17 @@ async function storageDeleteSafe(key){
   });
 }
 
-// --- Training Pulse: the one deliberate exception to "every passcode's data is isolated" ---
-// A separate reserved passcode value, used ONLY for this feature, so a bug here can never
-// leak into anyone's actual training data. Nothing about a person's real passcode, plan, or
-// logs ever touches this bucket - only what they explicitly opt in to share (a display name
-// and session-count-derived points/streaks - never distances, weights, or raw logs).
-const PULSE_SHARED_PASSCODE = '__training_pulse__';
+// --- Training Pulse: the one deliberate exception to "every account's data is isolated" ---
+// A reserved group id, used ONLY for this feature - a bug here can never leak into anyone's
+// actual training data. Scoped by the "Authenticated users can .../the default Pulse group"
+// RLS policies from Phase 1, so only real logged-in accounts can touch it (previously this
+// was reachable by anyone with the public anon key at all, logged in or not).
+const PULSE_GROUP_ID = 'default_group';
 async function pulseSharedSet(key, value){
   try{
     const { error } = await supabaseClient.from('kv_store').upsert(
-      { passcode: PULSE_SHARED_PASSCODE, key, value, updated_at: new Date().toISOString() },
-      { onConflict: 'passcode,key' }
+      { group_id: PULSE_GROUP_ID, key, value, updated_at: new Date().toISOString() },
+      { onConflict: 'group_id,key' }
     );
     if(error) throw error;
     return true;
@@ -1992,7 +2056,7 @@ async function pulseSharedSet(key, value){
 async function pulseSharedGetAll(){
   try{
     const { data, error } = await supabaseClient.from('kv_store').select('key,value')
-      .eq('passcode', PULSE_SHARED_PASSCODE);
+      .eq('group_id', PULSE_GROUP_ID);
     if(error) throw error;
     return data || [];
   }catch(e){ console.warn('Training Pulse shared read failed:', e); return []; }
@@ -2000,12 +2064,11 @@ async function pulseSharedGetAll(){
 async function pulseSharedDelete(key){
   try{
     const { error } = await supabaseClient.from('kv_store').delete()
-      .eq('passcode', PULSE_SHARED_PASSCODE).eq('key', key);
+      .eq('group_id', PULSE_GROUP_ID).eq('key', key);
     if(error) throw error;
     return true;
   }catch(e){ console.warn('Training Pulse shared delete failed:', e); return false; }
 }
-
 let pulseSettingsGlobal = { enabled:false, name:'', pulseId:'' };
 async function loadPulseSettings(){
   try{ const r = await storageGetSafe('pulse_settings'); return r ? JSON.parse(r.value) : { enabled:false, name:'', pulseId:'' }; }
@@ -2013,17 +2076,9 @@ async function loadPulseSettings(){
 }
 async function savePulseSettings(p){ await storageSetSafe('pulse_settings', JSON.stringify(p)); }
 function makePulseId(){
-  // Random, not derived from the passcode itself - the shared bucket should never contain
-  // anything that could be used to guess or target someone's actual passcode.
   return (typeof crypto!=='undefined' && crypto.randomUUID) ? crypto.randomUUID() : 'pulse_' + Date.now() + '_' + Math.random().toString(36).slice(2);
 }
 
-// Points for a given week (identified by its Monday), computed fresh each time from the exact
-// same completion data shown elsewhere in the app (session_completion for runs,
-// strength_session_completion for strength) - never a separately-tracked number that could
-// drift from what someone actually sees logged for themselves. 1pt per day with a completed
-// run, 1pt per day with a completed strength session, +1 bonus if that week's Long run was
-// completed, and flags an "iron day" if any single day had both a run and strength done.
 function computeWeeklyPoints(weekMonday){
   const weekDates = [0,1,2,3,4,5,6].map(i=>addDays(weekMonday, i));
   const todayStr = toLocalISO(new Date());
@@ -2046,11 +2101,6 @@ function computeWeeklyPoints(weekMonday){
   return { points, ironDay };
 }
 
-// Loads this person's own record from the shared bucket (or starts a fresh one), and rolls
-// the week over if the calendar has moved on since it was last written: last week's points
-// get frozen into history, streak updates (continues if last week had points and the gap was
-// a normal single week, otherwise resets - a multi-week gap is treated as a broken streak
-// rather than guessed at), and the current week starts clean at zero.
 async function getOrInitPulseRecord(){
   const currentMonday = getWeekDates()[0];
   let record = null;
@@ -2067,7 +2117,7 @@ async function getOrInitPulseRecord(){
   if(record.weekStart !== currentMonday){
     const daysGap = Math.round((new Date(currentMonday) - new Date(record.weekStart)) / 86400000);
     record.history.push({ weekStart: record.weekStart, points: record.points||0 });
-    if(record.history.length > 26) record.history = record.history.slice(-26); // half a year of weeks is plenty
+    if(record.history.length > 26) record.history = record.history.slice(-26);
     const isAdjacentWeek = daysGap === 7;
     record.streak = (isAdjacentWeek && (record.points||0) > 0) ? (record.streak||0) + 1 : 0;
     record.longestStreak = Math.max(record.longestStreak||0, record.streak);
@@ -2089,9 +2139,6 @@ async function updateTrainingPulseIfEnabled(){
   await pulseSharedSet(pulseSettingsGlobal.pulseId, JSON.stringify(record));
 }
 
-// Points for a specific past (or current) week from someone's record - checks their current
-// in-progress week first, then their frozen history. Returns null if there's no data for that
-// week at all (they weren't opted in yet, or haven't opened the app since).
 function getPointsForWeek(record, weekStart){
   if(record.weekStart === weekStart) return record.points||0;
   const h = (record.history||[]).find(x=>x.weekStart===weekStart);
@@ -2144,17 +2191,15 @@ async function renderTrainingPulseTile(){
 
   const entries = rows.filter(r=>r.key!=='pulse_challenge').map(r=>{
     try{ const e = JSON.parse(r.value); e.pulseId = r.key; return e; }catch(err){ return null; }
-  }).filter(Boolean).filter(e => e.weekStart === currentMonday); // stale (not-opened-in-a-while) entries just fall off, not shown as "0"
+  }).filter(Boolean).filter(e => e.weekStart === currentMonday);
 
   if(entries.length === 0){ body.innerHTML = `<p class="note" style="margin:0;">Nobody\u2019s showing up here yet this week \u2014 give it a moment after your first session.</p>`; return; }
 
-  // Season total + weeks-won tally, computed fresh from everyone's history rather than stored -
-  // avoids two devices ever disagreeing about who "actually" won a given past week.
   const allWeekStarts = new Set();
   entries.forEach(e=>{ allWeekStarts.add(e.weekStart); (e.history||[]).forEach(h=>allWeekStarts.add(h.weekStart)); });
   const weeksWonCount = {};
   allWeekStarts.forEach(ws=>{
-    if(ws === currentMonday) return; // don't crown a winner for the still-in-progress week
+    if(ws === currentMonday) return;
     let bestId = null, bestPts = -1, tie = false;
     entries.forEach(e=>{
       const p = getPointsForWeek(e, ws);
@@ -2169,7 +2214,6 @@ async function renderTrainingPulseTile(){
     e.weeksWon = weeksWonCount[e.pulseId] || 0;
   });
 
-  // Last week's winner banner - only shown once at least one entry actually has data for it.
   let lastWeekBanner = '';
   const lastWeekScores = entries.map(e=>({ name:e.name, pts:getPointsForWeek(e, lastMonday) })).filter(s=>s.pts!==null);
   if(lastWeekScores.length > 0){
@@ -2222,16 +2266,12 @@ async function renderTrainingPulseTile(){
 
 let pulseRealtimeChannel = null;
 function subscribeTrainingPulseRealtime(){
-  // Requires Realtime turned on for the kv_store table in the Supabase dashboard (Database ->
-  // Replication, one-time toggle - not something this code can enable itself). If it hasn't
-  // been turned on, this subscription just never fires and the tile falls back to updating on
-  // its normal page-load/action refreshes, exactly like before - nothing breaks either way.
   if(!supabaseClient || pulseRealtimeChannel) return;
   try{
     pulseRealtimeChannel = supabaseClient
       .channel('training_pulse_changes')
       .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'kv_store', filter: `passcode=eq.${PULSE_SHARED_PASSCODE}` },
+        { event: '*', schema: 'public', table: 'kv_store', filter: `group_id=eq.${PULSE_GROUP_ID}` },
         () => { renderTrainingPulseTile(); }
       )
       .subscribe();
@@ -2256,7 +2296,7 @@ async function enablePushNotifications(){
     return;
   }
   if(!pulseSettingsGlobal.enabled || !pulseSettingsGlobal.pulseId){
-    note.textContent = 'Turn on Training Pulse above first \u2014 notifications are tied to your Pulse identity, not your passcode, so nobody else\u2019s device can ever see your real passcode.';
+    note.textContent = 'Turn on Training Pulse above first \u2014 notifications are tied to your Pulse identity, not your account, so nobody else\u2019s device can ever see your real account.';
     return;
   }
   try{
@@ -2270,10 +2310,6 @@ async function enablePushNotifications(){
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(PUSH_VAPID_PUBLIC_KEY),
     });
-    // Stored INSIDE the shared Pulse record (keyed by pulseId), not under the real passcode -
-    // a kudos-sender only ever has the recipient's pulseId, never their actual passcode, so
-    // this is the only place a push subscription could be looked up from without leaking
-    // passcodes into the shared bucket.
     const record = await getOrInitPulseRecord();
     record.pushSubscription = subscription;
     await pulseSharedSet(pulseSettingsGlobal.pulseId, JSON.stringify(record));
@@ -2284,10 +2320,6 @@ async function enablePushNotifications(){
   }
 }
 
-// Fire-and-forget: called after actions worth notifying about (kudos, for now). Takes the
-// recipient's pulseId (never their real passcode - the sender never has that, by design).
-// Silently does nothing if the recipient hasn't enabled notifications - the Edge Function
-// itself treats that as a normal, non-error outcome, not a failure.
 async function triggerPushNotification(toPulseId, title, body){
   if(!PUSH_VAPID_PUBLIC_KEY) return;
   try{
@@ -2336,7 +2368,7 @@ async function exportAllData(){
 
 async function importAllData(e){
   const file = e.target.files[0];
-  e.target.value = ''; // reset so re-selecting the same file later still fires 'change'
+  e.target.value = '';
   if(!file) return;
   let data;
   try{
@@ -2368,9 +2400,6 @@ async function resetMarathonPlan(){
     ? 'This completely resets your Marathon plan \u2014 race date, goal time, and every edit you\u2019ve made to the weekly table (session completions included) \u2014 back to the original agreed plan. Your Strength exercises, Strava history, Habits, and Body Check log are NOT affected. This can\u2019t be undone. Continue?'
     : `This clears every edit you\u2019ve made to the current ${goalTypeGlobal} plan (session completions included) and regenerates a fresh plan for the same race date and goal time. It does NOT go to the archive. Your Strength exercises, Strava history, Habits, and Body Check log are NOT affected. This can\u2019t be undone. Continue?`;
   if(!confirm(warning)) return;
-  // For Marathon, wipe race date/goal time too - they fall back to the known-good original
-  // defaults. For other goal types, race date/goal time must be KEPT: falling back to
-  // DEFAULT_RACE_DATE would silently swap in the marathon's date for a 5K/10K/Half block.
   const keysToDelete = isMarathon ? MARATHON_PLAN_KEYS : ['marathon_plan_v2','session_completion'];
   for(const k of keysToDelete){
     try{ await storageDeleteSafe(k); }catch(e){ /* key may not exist yet - fine */ }
@@ -2380,7 +2409,6 @@ async function resetMarathonPlan(){
 }
 
 function getEntrySets(entry){
-  // Normalizes both formats: old {weight: '60'} single-value entries, and new {sets: ['60','62.5',...]}
   if(!entry) return [];
   if(Array.isArray(entry.sets)) return entry.sets.filter(w=>w!=='' && w!=null);
   if(entry.weight) return [entry.weight];
@@ -2397,11 +2425,8 @@ function getLastEntry(strengthLog, exerciseName, beforeDate){
   if(!dates.length) return null;
   return {date: dates[dates.length-1], ...hist[dates[dates.length-1]]};
 }
-// Increment sizes by role - standard, well-established progression sizing: compound barbell
-// lifts can add real load session-to-session, isolation/accessory/core work usually can't
-// without breaking form, so those get a smaller, more realistic bump.
 const OVERLOAD_INCREMENT_BY_ROLE = { compound:2.5, accessory:1.25, isolation:1.25, main:1.25 };
-const OVERLOAD_INCREMENT_DEFAULT = 1.25; // custom/renamed exercises not in the library
+const OVERLOAD_INCREMENT_DEFAULT = 1.25;
 
 function suggestionFor(last, exerciseName){
   const w = last ? getTopWeight(last) : null;
@@ -2426,7 +2451,7 @@ function addDays(dateStr, n){
 function describeQualitySession(role, totalKm, zones, phase){
   if(role==='Interval'){
     const reps = phase==='Build' ? '6 x 800m' : '5 x 1000m';
-    const coreKm = phase==='Build' ? (6*0.8 + 6*0.4) : (5*1.0 + 5*0.4); // reps + jog recovery
+    const coreKm = phase==='Build' ? (6*0.8 + 6*0.4) : (5*1.0 + 5*0.4);
     const remainder = Math.max(totalKm - coreKm, 0);
     const warmup = Math.round((remainder/2)*10)/10;
     const cooldown = Math.round((remainder-warmup)*10)/10;
@@ -2453,16 +2478,8 @@ function describeQualitySession(role, totalKm, zones, phase){
   }
   return '';
 }
-
-// A categorized library the generator picks from, organized by movement pattern (Push, Pull,
-// Legs, Core) rather than by a fixed Upper/Lower/Core split - this is what lets several
-// different splits (see SPLIT_TEMPLATES below) share the same underlying exercise pool instead
-// of needing a separate library each. Tagged by equipment tier, movement role (compound /
-// accessory / isolation, or "main" for Core), and which body area each exercise tends to
-// aggravate if flagged - used to swap it out rather than exclude it outright, so an injury flag
-// still gets a full, appropriately-loaded session, not a gap.
 const STRENGTH_MUSCLE_LIBRARY = {
-  Push: { // chest, shoulders, triceps
+  Push: {
     fullGym: {
       compound: [
         { name:'Barbell Bench Press', avoid:['shoulder','wrist'] },
@@ -2499,7 +2516,7 @@ const STRENGTH_MUSCLE_LIBRARY = {
       ],
     },
   },
-  Pull: { // back, biceps
+  Pull: {
     fullGym: {
       compound: [
         { name:'Barbell Row', avoid:['lowerback'] },
@@ -2537,7 +2554,7 @@ const STRENGTH_MUSCLE_LIBRARY = {
       ],
     },
   },
-  Legs: { // quads, hamstrings, glutes, calves
+  Legs: {
     fullGym: {
       compound: [
         { name:'Barbell Back Squat', avoid:['knee','lowerback'] },
@@ -2611,10 +2628,6 @@ const STRENGTH_MUSCLE_LIBRARY = {
   },
 };
 
-// The available split styles. Each just names which sessions it needs (a session's "key" is
-// the category shown/logged under - repeating a key, as Full Body does, means that same
-// generated session gets scheduled on multiple days rather than needing separate variants).
-// Sourced from standard, well-established resistance training programming - nothing exotic.
 const SPLIT_TEMPLATES = {
   upperLowerCore: {
     label: 'Upper / Lower / Core',
@@ -2638,9 +2651,6 @@ const SPLIT_TEMPLATES = {
   },
 };
 
-// Sets/reps by goal - the standard, well-established rep-range conventions: lower reps and
-// heavier loads for pure strength, moderate-high volume for hypertrophy, higher reps and
-// simpler movements for general fitness, and a strength/power-leaning mix for athletic goals.
 const GOAL_REP_SCHEMES = {
   general:     { compound:{sets:3, reps:'10-12'}, accessory:{sets:3, reps:12}, isolation:{sets:2, reps:12}, main:{sets:2, reps:'10-12'} },
   strength:    { compound:{sets:4, reps:5},        accessory:{sets:3, reps:8},  isolation:{sets:3, reps:10}, main:{sets:3, reps:10} },
@@ -2648,27 +2658,14 @@ const GOAL_REP_SCHEMES = {
   athletic:    { compound:{sets:4, reps:6},         accessory:{sets:3, reps:10}, isolation:{sets:3, reps:12}, main:{sets:3, reps:'10-12'} },
 };
 
-// How many exercises to pull from each role, by experience level - fewer, simpler movements
-// for someone new, more total exercise variety once there's a base of technique to work from.
 const STRENGTH_COUNT_BY_EXPERIENCE = {
   new:         { compound:2, accessory:1, isolation:1, main:3 },
   some:        { compound:3, accessory:2, isolation:2, main:4 },
   experienced: { compound:3, accessory:2, isolation:3, main:4 },
 };
-// Full Body sessions stay deliberately small (one exercise per movement pattern) since all
-// four patterns have to fit in a single session, unlike a whole session dedicated to one area -
-// experience only adds a couple of extra accessory exercises on top of the base four.
 const FULL_BODY_EXTRA_BY_EXPERIENCE = { new:0, some:1, experienced:2 };
 
 function pickExercisesAvoiding(list, count, injuryFlags){
-  // Rank by how many flagged areas each exercise would aggravate (fewest first), rather than
-  // a binary "fully clean" vs "ignore the flags entirely." When someone has flags in
-  // combination and nothing in a category is perfectly clean for all of them, this still
-  // surfaces whichever options carry the FEWEST conflicts instead of silently disabling the
-  // injury filter altogether - the bug the "everything flagged" stress test caught.
-  // Within each conflict-count tier, order is shuffled (not just library order) so
-  // regenerating a program - or two people with the same profile - don't always get the exact
-  // same picks. The avoidance ranking itself is untouched by this; only ties get reordered.
   const byConflictCount = new Map();
   list.forEach(ex=>{
     const n = ex.avoid.filter(x=>injuryFlags.includes(x)).length;
@@ -2693,9 +2690,6 @@ function buildStrengthRole(exList, roleKey, count, scheme, injuryFlags){
   return picked.map(ex => ({ name: ex.name, sets, reps, weighted: ex.weighted !== false }));
 }
 
-// Builds one session's exercise list for a given category key. Upper/Lower pull from a merged
-// Push+Pull (Upper) or Legs (Lower) pool; Push/Pull/Legs/Core pull straight from their matching
-// muscle-library entry; Full Body draws one compound exercise from each pattern plus Core.
 function buildStrengthSession(categoryKey, equipment, scheme, counts, experienceLevel, injuryFlags){
   const lib = STRENGTH_MUSCLE_LIBRARY;
   if(categoryKey === 'Upper'){
@@ -2734,10 +2728,6 @@ function buildStrengthSession(categoryKey, equipment, scheme, counts, experience
   return [];
 }
 
-// Generates a full program from a real profile - split picks which sessions are needed,
-// equipment tier picks which exercise pool to draw from, injury flags swap out anything that
-// tends to aggravate that area, experience level sets how many exercises per session, and goal
-// sets the sets/reps.
 function generateStrengthProgram(profile){
   const equipment = (profile.equipment === 'limited') ? 'limited' : 'fullGym';
   const scheme = GOAL_REP_SCHEMES[profile.goal] || GOAL_REP_SCHEMES.general;
@@ -2746,8 +2736,6 @@ function generateStrengthProgram(profile){
   const template = SPLIT_TEMPLATES[profile.split] || SPLIT_TEMPLATES.upperLowerCore;
 
   const result = {};
-  // Dedupe repeated session keys (Full Body appears 3x in its template but only needs
-  // generating once - the same generated session gets scheduled on all 3 days).
   const uniqueCategoryKeys = [...new Set(template.sessions.map(s=>s.key))];
   uniqueCategoryKeys.forEach(key=>{
     result[key] = buildStrengthSession(key, equipment, scheme, counts, profile.experienceLevel, injuryFlags);
@@ -2755,11 +2743,6 @@ function generateStrengthProgram(profile){
   return result;
 }
 
-// Checks a proposed strength schedule against the person's actual running plan: for each
-// chosen strength day, scans every week of the plan for a hard running session (Long, Tempo,
-// or Interval) landing on that same day-of-week. Returns one entry per day that has any
-// overlap, with a count of how many weeks it happens in - not a hard rule, just a real signal
-// worth surfacing before someone unknowingly stacks heavy legs onto their hardest run days.
 function checkStrengthScheduleConflicts(schedule){
   if(!marathonPlanGlobal || !marathonPlanGlobal.length) return [];
   const HARD_TYPES = ['Long','Tempo','Interval'];
@@ -2782,15 +2765,8 @@ const DEFAULT_STRENGTH_EXERCISES = {
   Core: [ {name:'Pelvic Tilts', sets:2, reps:12, weighted:false}, {name:'Bird Dog', sets:2, reps:'10 each side', weighted:false}, {name:'Dead Bug', sets:2, reps:'10 each side', weighted:false}, {name:'Side Plank with Reach-Through', sets:2, reps:'8 each side', weighted:false}, {name:'Pallof Press', sets:2, reps:'10 each side', weighted:true}, {name:'90/90 Hip Stretch', sets:2, reps:'45s each side', weighted:false}, {name:'Couch Stretch (hip flexor)', sets:2, reps:'45s each side', weighted:false} ]
 };
 
-// activeExercises starts as a deep copy of the defaults, then gets overridden per-category
-// by whatever's saved in storage (see loadCustomExercises / initPlan). Editable via the
-// "Edit Strength Exercises" panel on the Strength tab.
 let activeExercises = JSON.parse(JSON.stringify(DEFAULT_STRENGTH_EXERCISES));
 
-// Exercises with a fixed numeric rep scheme get an estimated 1RM instead of raw weight
-// tracking. Generalized to scan every category rather than assuming "Upper" specifically -
-// what actually matters is whether an exercise is weighted with a clean numeric rep count to
-// convert, which the per-exercise `weighted` flag and `reps` type already capture directly.
 let EXERCISE_1RM_REPS = {};
 function recomputeExercise1RMReps(){
   EXERCISE_1RM_REPS = {};
@@ -2800,25 +2776,12 @@ function recomputeExercise1RMReps(){
 }
 recomputeExercise1RMReps();
 function estimate1RM(weight, reps){
-  // Epley formula - a standard, well-established estimate from a submaximal set, not an instruction to actually test a 1-rep max
   return weight * (1 + reps/30);
 }
 
-// The session tabs/week view/history no longer assume Upper/Lower/Core specifically - whatever
-// categories the current split actually generated (see SPLIT_TEMPLATES) are read directly off
-// activeExercises, so Push/Pull/Legs, a 2-day Upper/Lower, or Full Body all work the same way.
 function getStrengthSessions(){ return Object.keys(activeExercises); }
-// Default suggested days if nobody's customized it - Mon/Wed/Fri, the original schedule this
-// app was built around. strengthScheduleGlobal is what actually gets read everywhere; this
-// constant is just its starting point (and what "Reset to defaults" restores).
 const DEFAULT_STRENGTH_SCHEDULE = { Mon:'Upper', Wed:'Lower', Fri:'Core' };
 let strengthScheduleGlobal = JSON.parse(JSON.stringify(DEFAULT_STRENGTH_SCHEDULE));
-// strengthScheduleGlobal always holds SOMETHING (it needs a starting point for the setup
-// form's day-pickers and the "Reset to defaults" button), but that starting point is a
-// placeholder, not real data. Anything shown to the person on Home must use this instead,
-// which only returns the real schedule once strengthProfileGlobal confirms setup actually
-// happened - otherwise a brand-new passcode would show a fake Upper/Lower/Core Mon/Wed/Fri
-// schedule as if it were their real plan.
 function getEffectiveStrengthSchedule(){ return strengthProfileGlobal ? strengthScheduleGlobal : {}; }
 async function loadStrengthSchedule(){ try{ const r = await storageGetSafe('strength_schedule'); return r?JSON.parse(r.value):null; }catch(e){ return null; } }
 async function saveStrengthSchedule(sched){ await storageSetSafe('strength_schedule', JSON.stringify(sched)); }
@@ -2837,8 +2800,6 @@ function dateHasSession(dateStr, session){
     return getEntrySets(entry).length > 0 || !!entry.feeling;
   });
 }
-// "Done" if either logged directly (weights/feel) or manually ticked - covers doing the
-// session without bothering to log numbers, and keeps every view of this in sync.
 function isStrengthDone(dateStr, session){
   return !!strengthSessionCompletion[dateStr+'_'+session] || dateHasSession(dateStr, session);
 }
@@ -2847,7 +2808,7 @@ async function toggleStrengthDone(dateStr, session, checked){
   if(checked) strengthSessionCompletion[key] = true;
   else delete strengthSessionCompletion[key];
   await saveStrengthSessionCompletion(strengthSessionCompletion);
-  updateTrainingPulseIfEnabled(); // fire-and-forget - no-op if not opted in
+  updateTrainingPulseIfEnabled();
   try{ renderHome(); }catch(e){ /* Home not ready yet - the end-of-load renderHome() call will catch it */ }
 }
 function initStrengthSessionLogger(){
@@ -2860,14 +2821,11 @@ function initStrengthSessionLogger(){
     const container = document.getElementById('strengthWeekBody');
     if(!container) return;
     const today = new Date();
-    const dow = (today.getDay()+6)%7; // 0 = Monday
+    const dow = (today.getDay()+6)%7;
     const monday = new Date(today); monday.setDate(today.getDate()-dow);
     const mondayStr = toLocalISO(monday);
     const dayIndexByName = {Mon:0,Tue:1,Wed:2,Thu:3,Fri:4,Sat:5,Sun:6};
 
-    // Iterate by scheduled DAY, not by unique category - a split like Full Body schedules the
-    // same category on 3 different days, and each of those needs its own row/checkbox. Sorted
-    // into calendar order (Mon first) so the list reads like an actual week, not insertion order.
     const scheduledDays = Object.keys(strengthScheduleGlobal).slice().sort((a,b)=>dayIndexByName[a]-dayIndexByName[b]);
     container.innerHTML = scheduledDays.map(scheduledDay=>{
       const session = strengthScheduleGlobal[scheduledDay];
@@ -2885,7 +2843,7 @@ function initStrengthSessionLogger(){
         await toggleStrengthDone(e.target.dataset.date, e.target.dataset.session, e.target.checked);
         renderStrengthWeekSummary();
         renderStrengthDaysLog();
-        if(window._replan) window._replan(); // keep the combined This Week tile on Home in sync
+        if(window._replan) window._replan();
       });
     });
   }
@@ -2987,7 +2945,7 @@ function initStrengthSessionLogger(){
       renderSessionBody();
       renderStrengthDaysLog();
       renderStrengthWeekSummary();
-      if(window._replan) window._replan(); // keep the combined This Week tile on Home in sync
+      if(window._replan) window._replan();
     });
   }
 
@@ -3032,8 +2990,6 @@ function initStrengthSessionLogger(){
     const lastVal = lastTop!==null ? (use1RM ? Math.round(estimate1RM(lastTop,repsForExercise)*10)/10 : lastTop) : null;
     const metricLabel = use1RM ? 'Est. 1RM' : 'Logged weight';
 
-    // PR = the best value across all logged history for this exercise (ties go to the
-    // earliest occurrence, so a repeat of your best doesn't get relabeled as a "new" PR).
     let prIndex = -1, prValue = null;
     values.forEach((v,i)=>{ if(v!==null && (prValue===null || v>prValue)){ prValue=v; prIndex=i; } });
     const todayKey = toLocalISO(new Date());
@@ -3047,7 +3003,7 @@ function initStrengthSessionLogger(){
 
     const pointRadii = entries.map((_,i)=> i===prIndex ? 8 : 5);
     const pointBorderWidths = entries.map((_,i)=> i===prIndex ? 3 : 1);
-    const prPointColor = '#E8C468'; // gold, distinct from the feeling colors used elsewhere
+    const prPointColor = '#E8C468';
 
     const logWrap = document.getElementById('liftSetLogWrap');
     const logBody = document.getElementById('liftSetLogBody');
@@ -3113,17 +3069,11 @@ function initStrengthSessionLogger(){
   };
 }
 
-// Default suggested days for however many sessions a split needs, spread out rather than
-// clustered - used only when there's no existing schedule to prefill from.
 function defaultDayForIndex(i){
   const pool = ['Mon','Wed','Fri','Tue','Thu','Sat','Sun'];
   return pool[i % pool.length];
 }
 
-// Renders one <select> per session in the chosen split, pre-filled from the existing schedule
-// where possible (matched by category, in day-of-week order) so switching back to a split you
-// already had doesn't lose your chosen days. Each select carries the session's category key in
-// a data attribute so the confirm handler can read them back out generically.
 function renderStrengthDayPickers(splitKey, prefillSchedule){
   const template = SPLIT_TEMPLATES[splitKey] || SPLIT_TEMPLATES.upperLowerCore;
   const container = document.getElementById('strengthDayPickers');
@@ -3150,19 +3100,12 @@ function renderStrengthDayPickers(splitKey, prefillSchedule){
 }
 
 async function initExerciseEditor(){
-  // Explicit flag, same pattern as the Running tab's onboarding fix - not an inferred guess.
-  // A brand new passcode with no saved strength_profile sees ONLY the setup card, never the
-  // exercise list, week view, or session logger - those stay hidden until real setup happens,
-  // so nobody mistakes someone else's actual program for a generic starting template.
   const strengthProfileRaw = await storageGetSafe('strength_profile');
   strengthProfileGlobal = strengthProfileRaw ? JSON.parse(strengthProfileRaw.value) : null;
   const hasStrengthSetup = !!strengthProfileGlobal;
   document.getElementById('strengthEditCard').style.display = hasStrengthSetup ? 'block' : 'none';
   document.getElementById('strengthWeekCard').style.display = hasStrengthSetup ? 'block' : 'none';
   document.getElementById('strengthLogCard').style.display = hasStrengthSetup ? 'block' : 'none';
-  // Same pattern as the Running tab: once real setup has actually happened, this card stops
-  // presenting itself as first-time setup - heading, note, and button all switch to "redo"
-  // framing. Explicit flag (hasStrengthSetup), never inferred.
   const strengthSetupDefaultLabel = hasStrengthSetup ? 'Redo My Program' : 'Set Up My Program';
   document.getElementById('strengthSetupHeading').textContent = hasStrengthSetup ? 'Strength Program' : 'Set Up Your Strength Program';
   document.getElementById('strengthSetupIntro').textContent = hasStrengthSetup
@@ -3182,10 +3125,6 @@ async function initExerciseEditor(){
     strengthScheduleGlobal = JSON.parse(JSON.stringify(DEFAULT_STRENGTH_SCHEDULE));
     try{ await storageDeleteSafe('custom_exercises'); }catch(e){ /* key may not exist yet - fine */ }
     try{ await storageDeleteSafe('strength_schedule'); }catch(e){ /* key may not exist yet - fine */ }
-    // Deliberately NOT deleting strength_profile here - that flag controls whether the
-    // exercise list, week view, and logger show at all. Wiping it on "reset to defaults"
-    // would hide everything and dump the person back at the setup screen instead of just
-    // giving them a fresh default program, which is what this button actually promises.
     recomputeExercise1RMReps();
     renderExerciseEditor();
     if(window._replan) window._replan();
@@ -3211,8 +3150,6 @@ async function initExerciseEditor(){
     setupForm.style.display = showing ? 'none' : 'block';
     setupToggle.textContent = showing ? strengthSetupDefaultLabel : 'Cancel';
     if(!showing){
-      // Default the split selector to whatever's currently active, so redoing setup starts
-      // from where someone already is rather than silently resetting to Upper/Lower/Core.
       splitSelect.value = (strengthProfileGlobal && SPLIT_TEMPLATES[strengthProfileGlobal.split]) ? strengthProfileGlobal.split : 'upperLowerCore';
       updateSplitBlurb();
       renderStrengthDayPickers(splitSelect.value, strengthScheduleGlobal);
@@ -3234,8 +3171,6 @@ async function initExerciseEditor(){
     const newSchedule = {};
     dayPickers.forEach(sel=>{ newSchedule[sel.value] = sel.dataset.sessionKey; });
 
-    // Soft warning, not a rule: check the chosen days against the person's actual running
-    // plan for hard-session stacking before asking them to confirm anything.
     const conflicts = checkStrengthScheduleConflicts(newSchedule);
     if(conflicts.length > 0){
       const lines = conflicts.map(c =>
@@ -3257,10 +3192,6 @@ async function initExerciseEditor(){
     await storageSetSafe('strength_profile', JSON.stringify(profile));
     await saveStrengthSchedule(newSchedule);
 
-    // A full reload rather than a partial re-render: the schedule feeds Home's stats, the
-    // week-plan tile, and the session logger, all independently - reloading guarantees every
-    // one of them picks up the new schedule consistently instead of hunting down each render
-    // path by hand and risking one getting missed.
     alert('New strength program and schedule saved. The page will reload.');
     location.reload();
   });
@@ -3275,11 +3206,6 @@ async function persistExerciseChange(){
   if(window._replanStrength) window._replanStrength();
 }
 
-// A flat, deduped, alphabetically sorted list of every exercise name in the muscle library
-// (both equipment tiers, every category) - used by the "swap" dropdown in the exercise editor
-// so someone can browse real alternatives instead of only free-typing a name. Computed once
-// since the library itself is static data. Also tracks each name's `weighted` flag so swapping
-// updates that too, not just the name.
 const LIBRARY_EXERCISE_LOOKUP = (function(){
   const map = new Map();
   Object.values(STRENGTH_MUSCLE_LIBRARY).forEach(byEquipment=>{
@@ -3293,10 +3219,6 @@ const LIBRARY_EXERCISE_LOOKUP = (function(){
 })();
 const ALL_LIBRARY_EXERCISE_NAMES = Array.from(LIBRARY_EXERCISE_LOOKUP.keys()).sort();
 
-// Which role (compound/accessory/isolation/main) each library exercise belongs to - used only
-// to size progressive-overload suggestions sensibly: a compound lift can jump 2.5kg between
-// sessions, a small isolation movement usually can't. Custom/renamed exercises not in the
-// library fall back to the smaller, safer increment.
 const LIBRARY_EXERCISE_ROLE = (function(){
   const map = new Map();
   Object.values(STRENGTH_MUSCLE_LIBRARY).forEach(byEquipment=>{
@@ -3372,8 +3294,6 @@ function renderExerciseEditor(){
       const cat = e.target.dataset.cat, idx = Number(e.target.dataset.idx);
       activeExercises[cat][idx].name = name;
       if(LIBRARY_EXERCISE_LOOKUP.has(name)) activeExercises[cat][idx].weighted = LIBRARY_EXERCISE_LOOKUP.get(name);
-      // Sets/reps stay as they were (already tuned to goal/experience) - only name and
-      // weighted come from the swap, everything else is still the user's to adjust.
       await persistExerciseChange();
       renderExerciseEditor();
     });
@@ -3397,8 +3317,6 @@ function renderExerciseEditor(){
     });
   });
 }
-
-
 async function initPlan(){
   document.getElementById('resetMarathonPlanBtn').addEventListener('click', resetMarathonPlan);
 
@@ -3409,10 +3327,6 @@ async function initPlan(){
   recomputeExercise1RMReps();
   if(savedSchedule) strengthScheduleGlobal = savedSchedule;
   await initExerciseEditor();
-  // These are nine independent reads - none of them depend on each other's result, they just
-  // each populate a different global. Running them concurrently instead of one at a time is
-  // the actual fix for the page feeling slow to load: nine sequential Supabase round-trips
-  // becomes roughly one round-trip's worth of wall-clock time.
   const [
     strengthLogRaw, strengthGoalsRaw, strengthSessionCompletionRaw,
     goalTypeRaw, planProfileRaw, raceDateRaw, goalTimeRaw, marathonPlanRaw, sessionCompletionRaw
@@ -3429,16 +3343,10 @@ async function initPlan(){
   try{
     planProfileGlobal = planProfileRaw ? JSON.parse(planProfileRaw.value) : null;
   }catch(e){ planProfileGlobal = null; }
-  // Fully explicit now, no inference: "set up" means goal_type has actually been saved, full
-  // stop. Every previous version of this check tried to guess from surrounding data, and every
-  // version of that guess eventually broke for some real sequence of actions. This can't -
-  // there's no ambiguous state left to misread.
   const isBrandNewPasscode = (goalTypeRaw === null);
   isBrandNewRunningGlobal = isBrandNewPasscode;
-  goalTypeGlobal = goalTypeRaw || 'Marathon'; // still need a sane internal value even pre-setup
+  goalTypeGlobal = goalTypeRaw || 'Marathon';
   document.getElementById('activeGoalTypeFlag').textContent = isBrandNewPasscode ? 'Not set up' : goalTypeGlobal;
-  // Nav label stays fixed ("Running Shit") regardless of goal type now - no longer
-  // overwritten with "${goalType} Plan".
 
   let raceDate = raceDateRaw;
   if(!raceDate) raceDate = isBrandNewPasscode ? '' : DEFAULT_RACE_DATE;
@@ -3449,9 +3357,6 @@ async function initPlan(){
 
   let marathonPlan = marathonPlanRaw;
   if(!marathonPlan || !Array.isArray(marathonPlan) || marathonPlan.length === 0){
-    // A brand new passcode gets a genuinely empty plan and an onboarding prompt below - NOT
-    // this app's original hand-built Marathon plan or its real race date. Those stay reserved
-    // for an existing Marathon-goal passcode explicitly using Reset, never a fresh one.
     marathonPlan = isBrandNewPasscode ? [] : (goalTypeGlobal === 'Marathon' ? JSON.parse(JSON.stringify(DEFAULT_MARATHON_PLAN)) : generateFullPlan(goalTypeGlobal, raceDate));
   }
   const sessionCompletion = sessionCompletionRaw;
@@ -3466,7 +3371,7 @@ async function initPlan(){
     document.getElementById('toggleNewBlockForm').textContent = 'Set Up My Plan';
   }
 
-  let currentZones = null; // recomputed by renderZones(), read by session cards for pace display
+  let currentZones = null;
 
   function renderZones(){
     const goalSec = parseHMS(document.getElementById('goalTime').value);
@@ -3487,7 +3392,6 @@ async function initPlan(){
     numEl.style.fontSize = daysLeft > 0 ? '26px' : '13px';
     document.getElementById('countdownLbl').textContent = daysLeft > 0 ? 'DAYS TO RACE' : '';
 
-    // Bezel ring fills up as the training block progresses from the plan's first week to race day.
     const ring = document.getElementById('countdownRing');
     if(ring && marathonPlanGlobal.length){
       const circumference = 2 * Math.PI * 50;
@@ -3581,7 +3485,7 @@ async function initPlan(){
         sessionCompletion[dkey] = e.target.checked;
         if(!e.target.checked) delete sessionCompletion[dkey];
         await saveSessionCompletion(sessionCompletion);
-        updateTrainingPulseIfEnabled(); // fire-and-forget - no-op if not opted in
+        updateTrainingPulseIfEnabled();
         const card = e.target.closest('.session-card');
         card.classList.toggle('session-done', e.target.checked);
         e.target.nextElementSibling.textContent = e.target.checked ? 'Done' : 'Mark done';
@@ -3589,7 +3493,6 @@ async function initPlan(){
       });
     });
 
-    // Auto-expand the current week
     const currentWeekIdx = marathonPlan.findIndex(w => todayStr >= w.monday && todayStr < addDays(w.monday,7));
     if(currentWeekIdx >= 0){
       const row = document.querySelector(`tr.plan-row[data-detail="detail-${currentWeekIdx}"]`);
@@ -3605,7 +3508,6 @@ async function initPlan(){
     if(!cal) return;
     if(!week){
       if(marathonPlan.length && todayStr < marathonPlan[0].monday){
-        // Plan hasn't started yet but is coming soon - show week 1 as a preview rather than a dead end
         week = marathonPlan[0];
         const daysAway = Math.round((new Date(week.monday+'T00:00:00') - new Date(todayStr+'T00:00:00')) / (1000*60*60*24));
         if(noteEl){
@@ -3652,7 +3554,7 @@ async function initPlan(){
         const dkey = e.target.dataset.date;
         if(e.target.checked) sessionCompletion[dkey] = true; else delete sessionCompletion[dkey];
         await saveSessionCompletion(sessionCompletion);
-        updateTrainingPulseIfEnabled(); // fire-and-forget - no-op if not opted in
+        updateTrainingPulseIfEnabled();
         renderMarathonTable();
         renderWeekPlanTile();
       });
@@ -3707,8 +3609,6 @@ async function initPlan(){
       document.getElementById('newBlockRaceDate').value = document.getElementById('raceDate').value;
       document.getElementById('newBlockGoalTime').value = document.getElementById('goalTime').value;
 
-      // Let them know up front whether there's enough real training data to sanity-check
-      // their goal automatically, or whether it's worth adding a push-pace estimate manually.
       const effort = findRealisticEffort(weeklyData.recent);
       const pushRow = document.getElementById('newBlockPushPaceRow');
       const note = document.getElementById('newBlockRealismNote');
@@ -3747,9 +3647,6 @@ async function initPlan(){
     if(justFinish && !enteredEasyPace){ alert('Enter your current comfortable pace so paces can still be calculated.'); return; }
     if(availableDays.length < 3){ alert('Pick at least 3 available days \u2014 fewer than that isn\u2019t enough to build a coherent plan around.'); return; }
 
-    // If the race is far enough out that the generator's base-phase cap would kick in, warn
-    // honestly about the resulting gap before generating anything, rather than silently
-    // handing back a plan with an unexplained hole in the middle.
     {
       const tmplCheck = PLAN_TEMPLATES[newGoalType] || PLAN_TEMPLATES.Marathon;
       const mondayStartCheck = mondayOnOrBefore(toLocalISO(new Date()));
@@ -3770,9 +3667,6 @@ async function initPlan(){
 
     const newGoalTime = justFinish ? deriveGoalTimeFromEasyPace(enteredEasyPace, newGoalType) : enteredGoalTime;
 
-    // Sanity-check the entered goal against a genuine reference effort, if one exists -
-    // either detected automatically from real training data, or self-reported just now.
-    // This never blocks or auto-corrects anything; it's a heads-up, not a rule.
     if(!justFinish){
       let reference = findRealisticEffort(weeklyData.recent);
       if(!reference){
@@ -3838,7 +3732,6 @@ async function initPlan(){
   renderWeekPlanTile();
   window._replan = function(){ renderMarathonTable(); renderWeekPlanTile(); };
 }
-
 /* ---------- Habits tab ---------- */
 const DEFAULT_HABIT_ITEMS = {
   evening: [
@@ -3846,14 +3739,9 @@ const DEFAULT_HABIT_ITEMS = {
     { id:'bedtime', label:'In bed by 10pm' },
   ],
 };
-// activeHabitItems starts as a copy of the defaults, then gets overridden by whatever's
-// saved in storage (see loadCustomHabitItems / initHabits). Editable via the "Edit" panel.
-// Morning is no longer here - it's the fixed, time-computed Morning Routine below.
 let activeHabitItems = JSON.parse(JSON.stringify(DEFAULT_HABIT_ITEMS));
 
 /* ---------- Morning Routine ---------- */
-// Defaults to whether today already has a planned run, so the person doesn't have to
-// remember to flip a switch every day - only overridden when they deviate from plan.
 function isRunDayDefault(dateStr){
   const dayKey = DAY_KEYS[(new Date(dateStr+'T00:00:00').getDay()+6)%7];
   const week = marathonPlanGlobal.find(w => dateStr >= w.monday && dateStr < addDays(w.monday, 7));
@@ -3865,8 +3753,6 @@ function effectiveRunDay(key){
   return isRunDayDefault(key);
 }
 
-// Fixed four-item routine - no wake-time math, since the alarm is the same every day.
-// Only the run/walk item's wording changes, based on whether today has a run scheduled.
 function visibleRoutineItems(runDay){
   return [
     { id:'hydrate', title:'Hydrate with sea salt', why:'Rehydration supports neuronal ion flow after a night without water.',
@@ -3889,7 +3775,7 @@ async function saveCustomHabitItems(){ await storageSetSafe('custom_habit_items'
 function habitItemId(){ return 'custom_' + Math.random().toString(36).slice(2,8); }
 
 let habitLog = {};
-let habitArcLength = null; // measured once from the real SVG path, not guessed
+let habitArcLength = null;
 
 async function loadHabitLog(){ try{ const r = await storageGetSafe('habit_log'); return r?JSON.parse(r.value):{}; }catch(e){ return {}; } }
 async function saveHabitLog(p){ await storageSetSafe('habit_log', JSON.stringify(p)); }
@@ -3897,14 +3783,12 @@ async function saveHabitLog(p){ await storageSetSafe('habit_log', JSON.stringify
 let habitSaveDebounceTimer = null;
 function saveHabitLogDebounced(){
   clearTimeout(habitSaveDebounceTimer);
-  habitSaveDebounceTimer = setTimeout(()=>{ saveHabitLog(habitLog); }, 700); // storageSetSafe already retries + self-heals on failure
+  habitSaveDebounceTimer = setTimeout(()=>{ saveHabitLog(habitLog); }, 700);
 }
 
 function getHabitDay(key){
   if(!habitLog[key]) habitLog[key] = { morning:{}, evening:{}, routine:{}, runDayOverride:null };
   const day = habitLog[key];
-  // Backfill fields for days logged before the Morning Routine existed, and migrate the
-  // old single trainingDayOverride onto the run flag as a starting point.
   if(!day.routine) day.routine = {};
   if(!('runDayOverride' in day)) day.runDayOverride = (day.trainingDayOverride ?? null);
   return day;
@@ -3955,7 +3839,7 @@ function renderHabitItems(containerId, items, key, section){
       const d = getHabitDay(key);
       if(!d[sec]) d[sec] = {};
       d[sec][id] = !d[sec][id];
-      renderHabits(); // instant visual feedback, independent of storage speed
+      renderHabits();
       saveHabitLogDebounced();
     });
   });
@@ -3991,16 +3875,12 @@ function renderHabitArc(key){
 
   const path = document.getElementById('habitArcFill');
   if(habitArcLength === null){
-    // Measure the real path length once instead of assuming pi*r - a small mismatch there
-    // (628 vs the true ~628.32) was leaving a tiny sliver visible at 0%, which the round
-    // line-cap then rendered as a stray dot. Using getTotalLength() removes the guesswork.
     habitArcLength = path.getTotalLength();
     path.setAttribute('stroke-dasharray', habitArcLength);
   }
   const offset = habitArcLength - (habitArcLength * pct / 100);
   path.setAttribute('stroke-dashoffset', offset);
 
-  // Arc center (230, 220), radius 200 - matches the path's "M 30 220 A 200 200 0 0 1 430 220"
   const angle = Math.PI - (Math.PI*pct/100);
   const cx = 230 + 200*Math.cos(angle);
   const cy = 220 - 200*Math.sin(angle);
@@ -4052,7 +3932,7 @@ function renderHabitEditor(){
     row.querySelector('.habit-edit-name').addEventListener('change', async (e)=>{
       const val = e.target.value.trim();
       if(!val){ e.target.value = activeHabitItems[section][idx].label; return; }
-      activeHabitItems[section][idx].label = val; // id stays the same, so history isn't lost
+      activeHabitItems[section][idx].label = val;
       await saveCustomHabitItems();
       renderHabits();
     });
@@ -4072,8 +3952,6 @@ function renderHabits(){
   renderHabitArc(key);
   renderHabitCounts(key);
   renderHabitWeek();
-  // Keep the run toggle in sync with today's effective value, in case the marathon
-  // plan finished loading after this ran, or a checkbox interaction changed it.
   const day = getHabitDay(key);
   const runToggle = document.getElementById('routineRunToggle');
   if(runToggle){
@@ -4082,14 +3960,12 @@ function renderHabits(){
     document.getElementById('routineRunAutoTag').textContent = overridden ? '(manually set)' : '(auto, from today\u2019s plan)';
     document.getElementById('routineRunResetBtn').style.display = overridden ? 'inline-block' : 'none';
   }
-  // Keep the Home tab's snapshot in sync; guarded since this runs during initial
-  // load too, before the marathon plan / pain log may have finished loading.
   try{ renderHome(); }catch(e){ /* Home not ready yet - the end-of-load renderHome() call will catch it */ }
 }
 
 /* ---------- Body Check (knee/calf pain tracking) ---------- */
 let painLog = {};
-const PAIN_COLORS = ['#6EA88C','#9BBF8E','#E07A4A','#C9633F','#D9534F']; // 1 (great) -> 5 (concerning)
+const PAIN_COLORS = ['#6EA88C','#9BBF8E','#E07A4A','#C9633F','#D9534F'];
 
 async function loadPainLog(){ try{ const r = await storageGetSafe('pain_log'); return r?JSON.parse(r.value):{}; }catch(e){ return {}; } }
 async function savePainLog(p){ await storageSetSafe('pain_log', JSON.stringify(p)); }
@@ -4117,7 +3993,7 @@ function renderPainButtons(containerId, field, key){
     btn.addEventListener('click', ()=>{
       const n = Number(btn.dataset.n);
       const d = getPainDay(key);
-      d[field] = (d[field] === n) ? undefined : n; // tap the same value again to clear it
+      d[field] = (d[field] === n) ? undefined : n;
       if(d[field] === undefined) delete d[field];
       savePainLogDebounced();
       renderPainCheck();
@@ -4134,7 +4010,6 @@ function renderPainCheck(){
   renderPainButtons('calfButtons', 'calf', key);
   const day = getPainDay(key);
   const noteEl = document.getElementById('painNote');
-  // Don't clobber the textarea while the person is actively typing in it
   if(document.activeElement !== noteEl) noteEl.value = day.note || '';
 }
 
@@ -4149,7 +4024,7 @@ function renderPainTrendChart(){
   }
   emptyNote.style.display = 'none';
   canvas.style.display = 'block';
-  const recentDates = dates.slice(-30); // last 30 logged days, not last 30 calendar days
+  const recentDates = dates.slice(-30);
   const labels = recentDates.map(d => fmtDate(d));
   const kneeData = recentDates.map(d => painLog[d].knee ?? null);
   const calfData = recentDates.map(d => painLog[d].calf ?? null);
@@ -4178,8 +4053,6 @@ function renderPainTrendChart(){
   }
 }
 
-// Buckets painLog (daily) into the same Monday-starting weeks as weeklyData.weekly,
-// so knee/calf ratings can be lined up against actual weekly km.
 function computeWeeklyPainAverages(){
   return weeklyData.weekly.map(w=>{
     const monday = new Date(w.week+'T00:00:00');
@@ -4252,8 +4125,6 @@ function renderBodyCheckSettingsRow(){
   const note = document.getElementById('bodyCheckSettingsNote');
   const btn = document.getElementById('toggleBodyCheckBtn');
   if(!card || !note || !btn) return;
-  // Only worth showing this control at all if there's a real injury flag behind it - no
-  // point offering to "turn Body Check back on" to someone who never flagged anything.
   if(!hasBodyCheckReason()){ card.style.display = 'none'; return; }
   card.style.display = 'block';
   if(bodyCheckDismissedGlobal){
@@ -4266,10 +4137,6 @@ function renderBodyCheckSettingsRow(){
 }
 
 async function initPainCheck(){
-  // Body Check only makes sense for someone who's actually flagged a relevant issue at
-  // setup - showing it to everyone by default was presenting an old injury-specific feature
-  // as if it were a universal one. Hidden (not just left inert) when neither intake flagged
-  // knee or calf specifically, OR when it's been manually dismissed (injuries subsided).
   bodyCheckDismissedGlobal = await loadBodyCheckDismissed();
   const showBodyCheck = shouldShowBodyCheck();
   document.getElementById('homeBodyCheckCard').style.display = showBodyCheck ? 'block' : 'none';
@@ -4309,8 +4176,6 @@ async function initPainCheck(){
 }
 
 /* ---------- Home (cross-tab weekly snapshot) ---------- */
-// Standalone copy of the Plan tab's weekTotal() so Home doesn't need access to initPlan()'s
-// internal closures - just reads the plan data initPlan() already exposed as a global.
 function homeWeekTotal(week){
   let sum = 0;
   DAY_KEYS.forEach(d=>{ const day = week.days[d]; if(day && typeof day.km === 'number') sum += day.km; });
@@ -4318,24 +4183,16 @@ function homeWeekTotal(week){
 }
 
 function renderHome(){
-  // Explicit flags, not inferred - same pattern as everything else here. Only shows when
-  // BOTH are genuinely un-set-up; setting up either one is enough to dismiss it for good
-  // (checked fresh on every renderHome() call, so it disappears the moment either is done,
-  // no reload needed).
   const welcomeCard = document.getElementById('homeWelcomeCard');
   if(welcomeCard) welcomeCard.style.display = (isBrandNewRunningGlobal && !strengthProfileGlobal) ? 'block' : 'none';
 
-  renderTrainingPulseTile(); // async, fire-and-forget - fills in once its own fetch resolves
+  renderTrainingPulseTile();
   subscribeTrainingPulseRealtime();
 
   const todayStr = toLocalISO(new Date());
-  const weekDates = getWeekDates(); // [Mon..Sun] for the current calendar week
+  const weekDates = getWeekDates();
   const mondayStr = weekDates[0];
 
-  // --- This Week stats ---
-  // Reuses computeDerived()'s thisWeek lookup rather than a second, separately-written
-  // Monday-matching query - one source of truth for "this week's km," so the Home stat
-  // and the Log stat can never quietly drift apart from each other again.
   const actualKm = computeDerived().thisWeek.km || 0;
   const planWeek = marathonPlanGlobal.find(w=>w.monday===mondayStr);
   const plannedKm = planWeek ? homeWeekTotal(planWeek) : null;
@@ -4358,14 +4215,6 @@ function renderHome(){
     <div class="stat"><div class="v">${streak}</div><div class="k">Day streak</div></div>
   `;
 
-  // Note: a per-day "Today's Plan" summary used to render here as its own tile. Removed as
-  // redundant - Week Calendar's today cell (highlighted, with the same run/strength
-  // checkboxes) already shows exactly this, just as part of the full week instead of a
-  // separate tile repeating the same single day.
-
-  // --- Body Check today ---
-  // The logging buttons themselves are rendered by renderPainCheck(); all this needs
-  // to do is raise the flag when today's rating is in concerning territory.
   const todayPain = painLog[todayStr] || {};
   const flagEl = document.getElementById('homeBodyCheckFlag');
   const concerning = (todayPain.knee >= 4) || (todayPain.calf >= 4);
@@ -4416,7 +4265,7 @@ async function initHabits(){
   });
   renderHabitEditor();
 
-  document.getElementById('changePasscodeBtn').addEventListener('click', changeSyncPasscode);
+  document.getElementById('changePasscodeBtn').addEventListener('click', handleLogout);
   document.getElementById('connectStravaBtn').addEventListener('click', connectStrava);
   document.getElementById('disconnectStravaBtn').addEventListener('click', disconnectStrava);
   refreshStravaStatus();
@@ -4426,7 +4275,7 @@ async function initHabits(){
 }
 
 (async function(){
-  await initPasscodeGate(); // blocks here until a passcode is set - nothing should load or save before that
+  await initAuthGate(); // blocks here until logged in - nothing should load or save before that
   try{
     handleStravaRedirectResult();
   }catch(e){ console.error('handleStravaRedirectResult failed:', e); }
@@ -4442,11 +4291,6 @@ async function initHabits(){
   try{
     initStatusBar();
   }catch(e){ console.error('initStatusBar failed:', e); }
-  // Early paint: the header quote/fact and streak badge only need weeklyData (already loaded
-  // above) plus safe-default globals for anything not loaded yet - showing them now instead of
-  // after the entire remaining chain (Strength/Running setup, Habits, Pain Check, Training
-  // Pulse) is what actually fixes the "quote/fact takes forever" lag. Refined again at the very
-  // end once real plan/habit data is in, so nothing here is ever wrong for long.
   try{
     renderDailyMotivation();
   }catch(e){ console.error('early renderDailyMotivation failed:', e); }
@@ -4462,9 +4306,6 @@ async function initHabits(){
       wrap.appendChild(banner);
     }
   }
-  // Early paint again: Home's Welcome card, This Week stats, Today's Plan, and Week Calendar
-  // all only need what initPlan() just finished loading - no reason to make them wait for
-  // Habits/Pain Check/Training Pulse too. Re-run once more at the very end regardless.
   try{
     renderHome();
   }catch(e){ console.error('early renderHome failed:', e); }
@@ -4487,7 +4328,7 @@ async function initHabits(){
     document.getElementById('savePulseSettingsBtn').addEventListener('click', async ()=>{
       const enabled = pulseToggle.checked;
       const name = pulseNameInput.value.trim().slice(0,24);
-      if(enabled && !name){ alert('Add a display name first \u2014 that\u2019s what shows to others instead of your passcode.'); return; }
+      if(enabled && !name){ alert('Add a display name first \u2014 that\u2019s what shows to others instead of your account.'); return; }
       if(enabled && !pulseSettingsGlobal.pulseId) pulseSettingsGlobal.pulseId = makePulseId();
       pulseSettingsGlobal = { enabled, name, pulseId: pulseSettingsGlobal.pulseId || '' };
       await savePulseSettings(pulseSettingsGlobal);
