@@ -277,6 +277,7 @@
     .session-grid{flex-direction:column;overflow-x:visible;} /* day-by-day plan cards stack instead of scrolling sideways */
     .session-card{flex:0 0 auto;min-width:0;}
     table{min-width:0;} /* the 420px floor set above forces tables wider than a phone's actual content width, clipping content off the right edge - removed here so tables can shrink to fit instead */
+    #marathonPlanBody td{white-space:normal;} /* the Week/Dates/Note/Total cells were each forced to fit on one unbroken line - long notes like "+Wednesday, first intervals" were still forcing the whole table wider than the screen even after the fix above. Letting them wrap fixes that. */
   }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -470,24 +471,6 @@
       <button class="cta-btn" id="onboardingSetupBtn" style="margin-top:12px;">Set Up My Plan</button>
     </div>
 
-    <div class="card" id="raceSetupCard" style="display:none;">
-      <h2>Race Setup <button id="resetMarathonPlanBtn" class="feel-btn" style="float:right;color:var(--rust);">Reset This Plan</button></h2>
-      <div class="field-row">
-        <div class="field">
-          <label>Race date</label>
-          <input type="date" id="raceDate">
-        </div>
-        <div class="field">
-          <label>Goal finish time</label>
-          <input type="text" id="goalTime" value="3:45:00" placeholder="h:mm:ss">
-        </div>
-      </div>
-      <div class="zone-grid" id="zoneGrid"></div>
-      <p class="note">Easy = conversational, most of your weekly volume. Long run = slightly easier than goal pace, for endurance. Tempo = comfortably hard, sustained effort. Interval = short, fast reps for speed &amp; VO2max.</p>
-      <p class="note">HR ranges are calibrated from your actual recent runs, not the generic Strava zone chart. "Now" reflects what's realistic today; "Goal" is what to work toward as fitness builds. Lead with pace/conversational effort; only back off if HR runs far outside the "Now" range.</p>
-      <p class="note">"Reset This Plan" wipes any edits and session completions but keeps the same goal, race date, and time &mdash; use it if you've messed something up and want a clean slate for what you're already training for. To switch to a different goal or race entirely, use "Start New Training Block" below instead.</p>
-    </div>
-
     <div class="card" id="trainingPlanCard" style="display:none;">
       <h2>Training Plan <span class="flag">built with you — fully editable</span></h2>
       <div class="legend">
@@ -505,6 +488,24 @@
         </table>
       </div>
       <p class="note">Tap a week to see the full day-by-day breakdown with session details, and tick off each one as you complete it. This plan isn't self-editing &mdash; if anything needs to change, tell Claude in chat and it'll update it here. Running only: strength sessions live on the Strength tab.</p>
+    </div>
+
+    <div class="card" id="raceSetupCard" style="display:none;">
+      <h2>Race Setup <button id="resetMarathonPlanBtn" class="feel-btn" style="float:right;color:var(--rust);">Reset This Plan</button></h2>
+      <div class="field-row">
+        <div class="field">
+          <label>Race date</label>
+          <input type="date" id="raceDate">
+        </div>
+        <div class="field">
+          <label>Goal finish time</label>
+          <input type="text" id="goalTime" value="3:45:00" placeholder="h:mm:ss">
+        </div>
+      </div>
+      <div class="zone-grid" id="zoneGrid"></div>
+      <p class="note">Easy = conversational, most of your weekly volume. Long run = slightly easier than goal pace, for endurance. Tempo = comfortably hard, sustained effort. Interval = short, fast reps for speed &amp; VO2max.</p>
+      <p class="note">HR ranges are calibrated from your actual recent runs, not the generic Strava zone chart. "Now" reflects what's realistic today; "Goal" is what to work toward as fitness builds. Lead with pace/conversational effort; only back off if HR runs far outside the "Now" range.</p>
+      <p class="note">"Reset This Plan" wipes any edits and session completions but keeps the same goal, race date, and time &mdash; use it if you've messed something up and want a clean slate for what you're already training for. To switch to a different goal or race entirely, use "Start New Training Block" below instead.</p>
     </div>
 
     <div class="card">
