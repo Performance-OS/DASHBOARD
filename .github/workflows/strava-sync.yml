@@ -16,17 +16,12 @@ jobs:
           STRAVA_CLIENT_ID: ${{ secrets.STRAVA_CLIENT_ID }}
           STRAVA_CLIENT_SECRET: ${{ secrets.STRAVA_CLIENT_SECRET }}
           SUPABASE_URL: 'https://mefuldlvyaorzulrnnyx.supabase.co'
-          # SECURITY FIX: this used to be a hardcoded anon key value sitting in plain text in
-          # this file - which is part of what the security report flagged, since it meant the
-          # key was visible to anyone browsing the public repo (in addition to it already being
-          # shipped in index.html, which is expected for the anon key specifically). Now it's a
-          # real GitHub Actions secret, AND it's the service role key rather than the anon key,
-          # since locking down kv_store's RLS means the anon key can no longer read across every
-          # passcode's data the way this sync job needs to.
-          #
-          # Add this secret once: repo -> Settings -> Secrets and variables -> Actions ->
-          # New repository secret -> name it SUPABASE_SERVICE_ROLE_KEY -> paste the service
-          # role key from Supabase (Project Settings -> API -> service_role key, NOT the anon
-          # key). Never paste the actual key value into this file.
+          # Service role key, not anon key - this script has no live user session for anyone
+          # it's syncing, so it needs the key that bypasses RLS entirely. Anon key alone can no
+          # longer read/write user-scoped kv_store rows now that RLS is the only protection.
+          # ADD THIS AS A NEW REPO SECRET before this workflow will work again:
+          # Settings -> Secrets and variables -> Actions -> New repository secret
+          # Name: SUPABASE_SERVICE_ROLE_KEY
+          # Value: from your Supabase project -> Settings -> API -> "service_role" key (secret)
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: node strava-sync.js
