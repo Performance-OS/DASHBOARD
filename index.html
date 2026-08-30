@@ -276,6 +276,7 @@
     .routine-time{margin-left:38px;flex-basis:100%;padding-left:0;margin-top:2px;}
     .session-grid{flex-direction:column;overflow-x:visible;} /* day-by-day plan cards stack instead of scrolling sideways */
     .session-card{flex:0 0 auto;min-width:0;}
+    table{min-width:0;} /* the 420px floor set above forces tables wider than a phone's actual content width, clipping content off the right edge - removed here so tables can shrink to fit instead */
   }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
