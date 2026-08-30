@@ -64,6 +64,7 @@
     --amber: #E07A4A; --gold: #F0A07A; --teal: #6EA88C; --rust: #C9633F; --brass: #E07A4A;
   }
   *{box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%;text-size-adjust:100%;} /* stops iOS Safari from auto-enlarging text inside narrow, horizontally-scrolling containers like table cells */
   body{margin:0;background:#0D0F12;color:var(--text);font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;padding:0;-webkit-font-smoothing:antialiased;}
   ::-webkit-scrollbar{width:8px;height:6px;}
   ::-webkit-scrollbar-track{background:transparent;}
@@ -273,6 +274,8 @@
     .field-row{gap:16px;}
     .habit-item{flex-wrap:wrap;}
     .routine-time{margin-left:38px;flex-basis:100%;padding-left:0;margin-top:2px;}
+    .session-grid{flex-direction:column;overflow-x:visible;} /* day-by-day plan cards stack instead of scrolling sideways */
+    .session-card{flex:0 0 auto;min-width:0;}
   }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -403,21 +406,6 @@
       <div class="stat-grid" id="homeStatGrid"></div>
     </div>
 
-    <div class="card" id="homeBodyCheckCard" style="display:none;">
-      <h2>Body Check <span class="flag" id="homeBodyCheckFlag" style="display:none;">check in on this</span></h2>
-      <div class="pain-row">
-        <div class="pain-label">Knee</div>
-        <div class="pain-buttons" id="kneeButtons"></div>
-      </div>
-      <div class="pain-row">
-        <div class="pain-label">Calf</div>
-        <div class="pain-buttons" id="calfButtons"></div>
-      </div>
-      <textarea id="painNote" rows="2" placeholder="Optional note (e.g. tight after the long run, felt fine all day)"></textarea>
-      <p class="note" style="margin-top:8px;">1 = feels great, 5 = concerning. Worth logging even on rest days &mdash; a rating that creeps up over a few days is the useful signal, not any single number. Trends live on the Habits tab.</p>
-      <button class="feel-btn" id="dismissBodyCheckBtn" style="margin-top:10px;padding:7px 14px;font-size:11px;">Hide Body Check &mdash; injuries have subsided</button>
-    </div>
-
     <div class="card">
       <h2>Week Calendar</h2>
       <p class="note" id="weekCalendarNote" style="display:none;margin-top:0;"></p>
@@ -455,6 +443,21 @@
         <button class="strava-btn" id="connectStravaBtn">Connect to Strava</button>
         <button class="feel-btn" id="disconnectStravaBtn" style="padding:9px 18px;display:none;color:var(--redline);">Disconnect</button>
       </div>
+    </div>
+
+    <div class="card" id="homeBodyCheckCard" style="display:none;">
+      <h2>Body Check <span class="flag" id="homeBodyCheckFlag" style="display:none;">check in on this</span></h2>
+      <div class="pain-row">
+        <div class="pain-label">Knee</div>
+        <div class="pain-buttons" id="kneeButtons"></div>
+      </div>
+      <div class="pain-row">
+        <div class="pain-label">Calf</div>
+        <div class="pain-buttons" id="calfButtons"></div>
+      </div>
+      <textarea id="painNote" rows="2" placeholder="Optional note (e.g. tight after the long run, felt fine all day)"></textarea>
+      <p class="note" style="margin-top:8px;">1 = feels great, 5 = concerning. Worth logging even on rest days &mdash; a rating that creeps up over a few days is the useful signal, not any single number. Trends live on the Habits tab.</p>
+      <button class="feel-btn" id="dismissBodyCheckBtn" style="margin-top:10px;padding:7px 14px;font-size:11px;">Hide Body Check &mdash; injuries have subsided</button>
     </div>
   </div>
 
