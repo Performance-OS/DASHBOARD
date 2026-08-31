@@ -887,6 +887,73 @@ const DEFAULT_RACE_DATE = '2026-12-06';
 // rule-of-thumb approximations (loosely VDOT-style) rather than sport-science-precise -
 // worth sanity-checking against how training actually feels once a block is underway.
 const GOAL_TYPE_DISTANCES = { Marathon: 42.195, Half: 21.0975, '10K': 10, '5K': 5 };
+
+/* =========================================================================================
+   VDOT PACE ENGINE (Stage 1 of the plan-generator rebuild) - Daniels & Gilbert, "Oxygen
+   Power" 1979 / Daniels' Running Formula 3rd ed. Deterministic, no AI - every number traces
+   to these equations. Designed and independently verified (21 self-tests) in a separate
+   design session before being ported in here.
+
+   STAGE 1 SCOPE ONLY: this replaces how pace ZONES are computed and displayed. The plan
+   GENERATOR below (generateFullPlan and everything it calls) is UNCHANGED and still uses
+   ZONE_OFFSETS_BY_GOAL_TYPE for its own internal volume math - that's Stage 2's job, not
+   this one. currentZonesGlobal below is kept in its old {easy,long,tempo,interval} shape as
+   a deliberate bridge so the still-unchanged session cards keep displaying correctly; the
+   mapping comment where it's built explains the interim choices.
+   ========================================================================================= */
+
+/** Oxygen cost of running at velocity v (metres per minute) -> ml/kg/min */
+function vo2AtVelocity(v){ return -4.60 + 0.182258*v + 0.000104*v*v; }
+/** Inverse: what velocity costs this much oxygen? (solves the quadratic) */
+function velocityForVO2(targetVO2){
+  const a=0.000104, b=0.182258, c=-4.60-targetVO2;
+  return (-b + Math.sqrt(b*b - 4*a*c)) / (2*a);
+}
+/** Fraction of VO2max sustainable for a race lasting t minutes. */
+function pctMaxForDuration(t){
+  return 0.8 + 0.1894393*Math.exp(-0.012778*t) + 0.2989558*Math.exp(-0.1932605*t);
+}
+/** Race performance -> VDOT. distanceM in metres, timeMin in minutes. */
+function vdotFromRace(distanceM, timeMin){ return vo2AtVelocity(distanceM/timeMin) / pctMaxForDuration(timeMin); }
+/** VDOT -> predicted time (minutes) at a distance. Fixed-point solve. */
+function timeForDistance(vdot, distanceM){
+  let t = distanceM/200;
+  for(let i=0; i<300; i++) t = distanceM / velocityForVO2(vdot * pctMaxForDuration(t));
+  return t;
+}
+
+// Zone definitions - two kinds. Duration-anchored (M/T/I) are derived from a definition and
+// self-verifying. Percentage-anchored (E/R) have no duration definition - these percentages
+// are the ones independently verified against an external reference (see design doc).
+const E_PCT_SLOW = 0.59, E_PCT_FAST = 0.74;  // Easy is a RANGE, not a point - verified
+const R_PCT = 1.05;                          // Repetition - verified exactly
+const M_PCT = 0.84;                          // Daniels' published marathon convention (alt mode, see below)
+// OPEN JUDGMENT CALL, decided: 'predicted' (M pace = this VDOT's predicted marathon time)
+// rather than 'daniels84' (M = flat 84% of VDOT, ~10 sec/mile faster). Conservative choice -
+// see design doc for the reasoning. Change here if that decision is ever revisited.
+const M_PACE_MODE = 'predicted';
+const T_DURATION_MIN = 60; // verified: yields a constant 88.8% of VDOT
+const I_DURATION_MIN = 11; // verified: yields ~100% of VDOT
+const MARATHON_M = 42195;
+
+/** All training zones as seconds per kilometre, for a given VDOT. */
+function paceZones(vdot){
+  const secPerKm = v => 60000/v;
+  return {
+    easySlow:  secPerKm(velocityForVO2(E_PCT_SLOW*vdot)),
+    easyFast:  secPerKm(velocityForVO2(E_PCT_FAST*vdot)),
+    marathon:  M_PACE_MODE === 'daniels84'
+                 ? secPerKm(velocityForVO2(M_PCT*vdot))
+                 : secPerKm(MARATHON_M / timeForDistance(vdot, MARATHON_M)),
+    threshold: secPerKm(velocityForVO2(pctMaxForDuration(T_DURATION_MIN)*vdot)),
+    interval:  secPerKm(velocityForVO2(pctMaxForDuration(I_DURATION_MIN)*vdot)),
+    repetition:secPerKm(velocityForVO2(R_PCT*vdot)),
+  };
+}
+/** Race pace at an arbitrary goal distance (not just marathon) - same technique as the
+    marathon zone above, generalised. Used for the Half/10K/5K "goal pace" tile. */
+function goalDistancePace(vdot, distanceM){ return (60000) / (distanceM / timeForDistance(vdot, distanceM)); }
+
 const ZONE_OFFSETS_BY_GOAL_TYPE = {
   Marathon: { easy: 70, long: 45, tempo: -10, interval: -55 },
   Half:     { easy: 60, long: 40, tempo: 5,   interval: -30 },
@@ -3414,16 +3481,35 @@ async function initPlan(){
   function renderZones(){
     const goalSec = parseHMS(document.getElementById('goalTime').value);
     const dist = GOAL_TYPE_DISTANCES[goalTypeGlobal] || GOAL_TYPE_DISTANCES.Marathon;
-    const goalPaceSec = goalSec/dist;
-    const off = ZONE_OFFSETS_BY_GOAL_TYPE[goalTypeGlobal] || ZONE_OFFSETS_BY_GOAL_TYPE.Marathon;
-    currentZones = { easy: goalPaceSec+off.easy, long: goalPaceSec+off.long, tempo: goalPaceSec+off.tempo, interval: goalPaceSec+off.interval };
-    currentZonesGlobal = currentZones;
+    const distM = dist * 1000;
+
+    // ---- Stage 1: VDOT-derived zones, replacing the flat sec/km offsets ----
+    const vdot = vdotFromRace(distM, goalSec/60);
+    const z = paceZones(vdot);
+    const goalPace = goalTypeGlobal === 'Marathon' ? z.marathon : goalDistancePace(vdot, distM);
+
     document.getElementById('zoneGrid').innerHTML = `
-      <div class="zone"><div class="p" style="color:var(--amber)">${fmtPace(currentZones.easy)}</div><div class="l">Easy /km</div></div>
-      <div class="zone"><div class="p" style="color:var(--teal)">${fmtPace(currentZones.long)}</div><div class="l">Long run /km</div></div>
-      <div class="zone"><div class="p" style="color:var(--text)">${fmtPace(currentZones.tempo)}</div><div class="l">Tempo /km</div></div>
-      <div class="zone"><div class="p" style="color:var(--rust)">${fmtPace(currentZones.interval)}</div><div class="l">Interval /km</div></div>
+      <div class="zone"><div class="p" style="color:var(--amber)">${fmtPace(z.easyFast)}\u2013${fmtPace(z.easySlow)}</div><div class="l">Easy /km</div></div>
+      <div class="zone"><div class="p" style="color:var(--teal)">${fmtPace(goalPace)}</div><div class="l">${goalTypeGlobal} pace /km</div></div>
+      <div class="zone"><div class="p" style="color:var(--text)">${fmtPace(z.threshold)}</div><div class="l">Threshold /km</div></div>
+      <div class="zone"><div class="p" style="color:var(--rust)">${fmtPace(z.interval)}</div><div class="l">Interval /km</div></div>
+      <div class="zone"><div class="p" style="color:var(--clay)">${fmtPace(z.repetition)}</div><div class="l">Repetition /km</div></div>
     `;
+
+    // Bridge for Stage 2: the plan generator and session cards below are UNCHANGED in this
+    // stage and still expect a single {easy,long,tempo,interval} point-value shape via
+    // currentZonesGlobal. Interim mapping only, superseded once the generator itself moves
+    // to VDOT in Stage 2: Easy -> easy-range midpoint; Long -> the faster edge of the easy
+    // range (long runs historically ran faster than plain easy here, closest VDOT-native
+    // equivalent until MP-embedded long runs are built); Tempo -> Threshold; Interval -> Interval.
+    currentZones = {
+      easy: (z.easyFast + z.easySlow) / 2,
+      long: z.easyFast,
+      tempo: z.threshold,
+      interval: z.interval,
+    };
+    currentZonesGlobal = currentZones;
+
     const daysLeft = daysUntil(document.getElementById('raceDate').value);
     const numEl = document.getElementById('countdownNum');
     numEl.textContent = daysLeft > 0 ? daysLeft : 'RACE DAY';
