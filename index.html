@@ -261,6 +261,9 @@
   textarea#painNote{width:100%;padding:11px 13px;font-family:'Inter',sans-serif;font-size:13px;font-weight:300;resize:vertical;margin-top:2px;box-sizing:border-box;}
 
   /* Auth gate (sign in / sign up / forgot / reset password) */
+  .app-spinner{width:36px;height:36px;border-radius:50%;border:3px solid rgba(255,255,255,0.1);border-top-color:var(--accent);animation:spin 0.8s linear infinite;}
+  .btn-spinner{display:inline-block;width:13px;height:13px;border-radius:50%;border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;animation:spin 0.7s linear infinite;vertical-align:-2px;margin-right:7px;}
+  @keyframes spin{to{transform:rotate(360deg);}}
   .auth-input{width:100%;box-sizing:border-box;padding:12px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:#fff;font-family:'IBM Plex Mono',monospace;font-size:14px;margin-bottom:12px;}
   .auth-submit-btn{width:100%;padding:12px;border-radius:12px;border:1px solid rgba(224,122,74,0.55);background:rgba(224,122,74,0.18);color:#fff;font-family:'Inter',sans-serif;font-weight:500;font-size:13px;cursor:pointer;}
   .auth-submit-btn:disabled{opacity:0.5;cursor:default;}
@@ -289,6 +292,10 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
+<div id="appLoadingOverlay" style="position:fixed;inset:0;z-index:10001;background:#0D0F12;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
+  <div class="app-spinner"></div>
+  <p style="color:#A3A3A3;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;">Loading</p>
+</div>
 <div id="authGate" style="display:none;position:fixed;inset:0;z-index:10000;background:#0D0F12;align-items:center;justify-content:center;padding:20px;overflow-y:auto;">
   <div style="max-width:340px;width:100%;background:rgba(23,23,23,0.6);backdrop-filter:blur(24px);border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:28px;text-align:center;">
     <h1 style="font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;font-size:28px;margin:0 0 8px;color:#fff;">Send It</h1>
@@ -2109,6 +2116,38 @@ async function loadStravaSnapshot(){
   }catch(e){ console.warn('Could not load Strava snapshot - showing the last-known fallback data instead:', e); }
 }
 
+// Auto-completes any planned running session that has a matching real Strava run on the
+// same calendar date. Covers today AND any recent day the sync happens to pick up (a run
+// from a few days ago that only just synced) - driven entirely by which dates Strava
+// actually shows a run for, not a fixed "look back N days" window. Matches by date only,
+// not distance - "you ran that day" is treated as the useful signal for auto-completion;
+// worth knowing as a deliberate simplification, not an oversight, if a stricter
+// distance-matching version is ever wanted.
+async function autoTickSessionsFromStrava(){
+  if(!marathonPlanGlobal || !marathonPlanGlobal.length) return;
+  const runDates = new Set();
+  (weeklyData.recent || []).forEach(r => { if(r.date) runDates.add(r.date); });
+  (thisWeekActivities || []).forEach(a => { if(a.sport_type === 'Run' && a.date) runDates.add(a.date); });
+
+  let changed = false;
+  for(const dateStr of runDates){
+    if(sessionCompletionGlobal[dateStr]) continue;
+    const week = marathonPlanGlobal.find(w => dateStr >= w.monday && dateStr < addDays(w.monday, 7));
+    if(!week) continue;
+    const dayKey = DAY_KEYS[(new Date(dateStr+'T00:00:00').getDay()+6)%7];
+    const session = week.days[dayKey];
+    if(session && session.type){
+      sessionCompletionGlobal[dateStr] = true;
+      changed = true;
+    }
+  }
+  if(changed){
+    await saveSessionCompletion(sessionCompletionGlobal);
+    updateTrainingPulseIfEnabled();
+    if(window._replan) window._replan();
+  }
+}
+
 // URL points at the function's ACTUAL deployed slug ("quick-worker"), not its display
 // name in the Supabase dashboard ("strava-manual-sync") - those are two different things,
 // and the mismatch between them was the whole bug: Supabase lets a function's dashboard
@@ -2131,16 +2170,18 @@ async function manualStravaRefresh(){
   const btn = document.getElementById('refreshBtn');
   const txt = document.getElementById('statusText');
   const dot = document.getElementById('statusDot');
+  const originalBtnText = btn.textContent;
   if(Date.now() < stravaRefreshCooldownUntil){
     const secsLeft = Math.ceil((stravaRefreshCooldownUntil - Date.now())/1000);
     txt.textContent = `Just synced \u2014 try again in ${secsLeft}s.`;
     return;
   }
   btn.disabled = true;
+  btn.innerHTML = '<span class="btn-spinner"></span>Syncing\u2026';
   txt.textContent = 'Syncing with Strava\u2026';
   try{
     const accessToken = await getUserAccessToken();
-    if(!accessToken){ txt.textContent = 'Not logged in \u2014 refresh the page and log back in.'; btn.disabled = false; return; }
+    if(!accessToken){ txt.textContent = 'Not logged in \u2014 refresh the page and log back in.'; return; }
     const res = await fetch(STRAVA_MANUAL_SYNC_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
@@ -2158,13 +2199,20 @@ async function manualStravaRefresh(){
       const d = new Date(stravaSyncedAt);
       txt.textContent = 'Synced from Strava ' + d.toLocaleDateString('en-GB',{day:'numeric',month:'short'}) + ' ' + d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
       dot.classList.remove('err');
-      renderHome();
+      // Both wrapped in their own try/catch - a failure in either shouldn't silently corrupt
+      // an otherwise-successful sync, and shouldn't leave the status text stuck on "Syncing".
+      try{ await autoTickSessionsFromStrava(); }catch(e){ console.error('Auto-tick after Strava sync failed:', e); }
+      try{ renderHome(); }catch(e){
+        console.error('renderHome after Strava sync failed:', e);
+        txt.textContent += ' (synced, but the Home tab had trouble refreshing \u2014 try switching tabs)';
+      }
     }
   }catch(e){
     console.warn('Manual Strava refresh failed:', e);
     txt.textContent = 'Refresh didn\u2019t go through \u2014 try again shortly.';
   }finally{
     btn.disabled = false;
+    btn.textContent = originalBtnText;
     stravaRefreshCooldownUntil = Date.now() + 30000;
   }
 }
@@ -2429,6 +2477,12 @@ function initAuthGate(){
     });
 
     (async ()=>{
+      // Hide the generic "app loading" spinner as soon as we're about to show something
+      // specific - either the login form or the real dashboard - never leave it covering
+      // the login screen indefinitely.
+      const overlay = document.getElementById('appLoadingOverlay');
+      if(overlay) overlay.style.display = 'none';
+
       // Arriving via a password-reset email link always shows the reset-password panel,
       // checked before the normal "already logged in" case - Supabase's own URL-detection
       // already establishes a temporary session for this link, but that session should never
@@ -4926,6 +4980,9 @@ async function initHabits(){
       wrap.appendChild(banner);
     }
   }
+  try{
+    await autoTickSessionsFromStrava();
+  }catch(e){ console.error('autoTickSessionsFromStrava failed:', e); }
   try{
     renderHome();
   }catch(e){ console.error('early renderHome failed:', e); }
