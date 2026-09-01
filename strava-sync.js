@@ -132,7 +132,7 @@ async function writeSnapshot(userId, weeklyData, thisWeekActivities){
     this_week_activities: thisWeekActivities,
     synced_at: new Date().toISOString(),
   });
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/kv_store`, {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/kv_store?on_conflict=user_id,key`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
