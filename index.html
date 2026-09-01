@@ -1157,97 +1157,407 @@ function buildStructuredWeek(opts){
   return { monday, days };
 }
 
+/* =========================================================================================
+   STAGE 2 - the plan generator itself, replacing the old flat-offset structure with the
+   VDOT-based, evidence-benchmarked engine designed and tested in a separate design session
+   (7,680-plan structural sweep + 864-plan full-adapter sweep, 0 issues in either).
+   Reuses Stage 1's vo2AtVelocity/velocityForVO2/pctMaxForDuration/vdotFromRace/
+   timeForDistance/fmtPace, and the app's existing toLocalISO/addDays/mondayOnOrBefore/
+   DAY_KEYS/parseHMS - nothing here redefines those.
+
+   KNOWN, DELIBERATE SCOPE LIMIT: the engine takes a run-day COUNT and a single long-run
+   day, not a specific SET of available weekdays - the "Start New Training Block" form's
+   day checkboxes are honoured for their count and long-day choice, but the engine's own
+   spacing logic picks which specific days, which may occasionally differ from exactly
+   which boxes were checked. Flagging this plainly rather than quietly shipping a mismatch.
+   ========================================================================================= */
+
+const PLAN_DAYS = DAY_KEYS;
+const planDayIdx = d => PLAN_DAYS.indexOf(d), planWrapDay = k => ((k%7)+7)%7;
+const planDayGap = (a,b) => Math.min(Math.abs(a-b), 7-Math.abs(a-b));
+
+const DIST = {
+  marathon:{raceKm:42.195,absLR:32,lrPctGuard:0.50,minWeeks:12,lrTimeCapMin:165,volumeMode:'build',easyMin:0.75,maxQuality:2,
+    maxPerRun:{3:22,4:19,5:16,6:14},
+    mix:{early:{T:1.0,I:0,RP:0},mid:{T:0.65,I:0.35,RP:0},late:{T:0.35,I:0,RP:0.65}},
+    rpInLongRun:true},
+  half:{raceKm:21.0975,absLR:21,lrPctGuard:0.40,minWeeks:10,lrTimeCapMin:130,
+    maxPerRun:{3:20,4:17,5:15,6:13},
+    mix:{early:{T:1.0,I:0,RP:0},mid:{T:0.55,I:0.45,RP:0},late:{T:0.35,I:0.15,RP:0.50}},
+    rpInLongRun:true,volumeMode:'build',easyMin:0.75,maxQuality:2},
+  '10k':{raceKm:10,absLR:12,lrPctGuard:0.30,minWeeks:8,lrTimeCapMin:90,
+    maxPerRun:{3:18,4:16,5:15,6:14},
+    mix:{early:{R:0.20,T:0.80},mid:{I:0.55,T:0.45},late:{I:0.40,T:0.25,RP:0.35}},
+    rpInLongRun:false,volumeMode:'flat',easyMin:0.73,maxQuality:3},
+  '5k':{raceKm:5,absLR:10,lrPctGuard:0.28,minWeeks:6,lrTimeCapMin:75,
+    maxPerRun:{3:17,4:15,5:14,6:13},
+    mix:{early:{R:0.25,T:0.75},mid:{I:0.60,T:0.40},late:{I:0.50,RP:0.35,R:0.15}},
+    rpInLongRun:false,volumeMode:'flat',easyMin:0.70,maxQuality:3},
+};
+const PLAN_R = {LR_WEEKLY_GAIN:2.5,BASE_TRIGGER:18,
+  DELOAD_EVERY_DEFAULT:4, DELOAD_EVERY_CAUTIOUS:3,
+  DELOAD_DEPTH_EARLY:0.80, DELOAD_DEPTH_LATE:0.68,
+  DELOAD_QUALITY_SCALE_BUILD:0.40,
+  DELOAD_QUALITY_SCALE_FLAT:0.60,
+};
+
+const GENERIC_START_KM = { marathon:25, half:18, '10k':14, '5k':12 };
+function effectiveRecentWeeklyKm(distance, experience, recentWeeklyKm){
+  if(recentWeeklyKm && recentWeeklyKm > 0) return recentWeeklyKm;
+  const base = GENERIC_START_KM[distance] || GENERIC_START_KM.marathon;
+  return experience === 'new' ? Math.round(base*0.7) : base;
+}
+function effectiveRecentLongestKm(recentLongestKm, effWeeklyKm){
+  if(recentLongestKm && recentLongestKm > 0) return recentLongestKm;
+  return Math.round(effWeeklyKm * 0.3);
+}
+function deriveVdotFromEasyPace(easyPaceSecPerKm){
+  const v = 60000 / easyPaceSecPerKm;
+  return vo2AtVelocity(v) / 0.70;
+}
+
+function planDeloadCadence(i){ return (i.experience==='new'||i.injuryFlag) ? PLAN_R.DELOAD_EVERY_CAUTIOUS : PLAN_R.DELOAD_EVERY_DEFAULT; }
+function planDeloadDepth(bw,buildW){
+  const f=Math.min(1,bw/Math.max(1,buildW));
+  return PLAN_R.DELOAD_DEPTH_EARLY+(PLAN_R.DELOAD_DEPTH_LATE-PLAN_R.DELOAD_DEPTH_EARLY)*f;
+}
+function derivePeak(i,C){
+  const expBase={new:1.25,consistent:1.40,experienced:1.55}[i.experience];
+  const lenBonus=Math.max(0,Math.min(0.55,(i.weeks-10)*0.045));
+  const a=i.recentWeeklyKm*(expBase+lenBonus);
+  const b=i.runDays*C.maxPerRun[i.runDays];
+  const c=i.recentWeeklyKm*(1+0.05*i.weeks);
+  const raw=Math.min(a,b,c), bind=['history','days','time'][[a,b,c].indexOf(raw)];
+  let p=raw; if(i.injuryFlag)p*=0.85; if(i.lifting)p*=0.93;
+  p=Math.max(p,i.recentWeeklyKm*(i.injuryFlag?0.9:1.0));
+  if(C.volumeMode==='flat') p=Math.min(p,i.recentWeeklyKm*1.35);
+  return{peak:Math.round(p),binding:bind};
+}
+function lrCeiling(i,peak,C){ return Math.round(Math.min(C.absLR,(C.lrTimeCapMin*60)/i.easyPace,peak*C.lrPctGuard)); }
+function lrLine(i,buildW,ceil){
+  const L=[];let cur=i.recentLongestKm;const pk=buildW-1;
+  for(let w=1;w<=buildW;w++){
+    if(w>1){const g=Math.min(PLAN_R.LR_WEEKLY_GAIN,(ceil-cur)/Math.max(1,pk-w+1));cur=Math.min(cur+g,ceil);}
+    L.push(Math.round(Math.min(cur,ceil)));}
+  return L;
+}
+const planPhaseOf=(w,b)=>{const f=w/b;return f<0.35?'early':f<0.70?'mid':'late';};
+
+function planQuality(ph,deload,paces,paceLabels,vol,rpInLR,C,slots){
+  if(ph==='base')return[{t:'Easy + strides',d:'6 x 20s strides',hard:false,qKm:0,label:'Easy + strides',paceLabel:null}];
+  const volAdj=Math.min(0.08,Math.max(0,(vol-45)/10*0.01));
+  const EM=Math.min(0.90,C.easyMin+volAdj);
+  const scale=deload?(C.volumeMode==='flat'?PLAN_R.DELOAD_QUALITY_SCALE_FLAT:PLAN_R.DELOAD_QUALITY_SCALE_BUILD):1;
+  let budget=Math.max(0,vol*(1-EM)*scale-(rpInLR||0));
+  const m=deload?{T:1.0}:C.mix[ph];const out=[];
+  const MIN={T:3,I:2.4,RP:3,R:1.6};
+  const HARDCAP={T:vol*0.10, I:Math.min(10,vol*0.08), R:Math.min(8,vol*0.05), RP:vol*0.20};
+  const order=Object.entries(m).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]).map(([k])=>k);
+  const share={};
+  for(const k of order){
+    if(k==='RP'&&rpInLR)continue;
+    if(budget<MIN[k])continue;
+    if(HARDCAP[k]<MIN[k])continue;
+    const want=Math.max(MIN[k],vol*(1-EM)*m[k]);
+    const got=Math.min(want,budget);
+    share[k]=got; budget-=got;
+  }
+  const CAP={T:vol*0.10, I:Math.min(10,vol*0.08), R:Math.min(8,vol*0.05), RP:vol*0.20};
+  const build={
+    T:()=>{const km=Math.min(share.T,13,CAP.T);
+      return ph==='early'
+        ?{t:'Threshold reps',d:`${Math.floor(km)} x 1km @ Threshold (${paceLabels.T}/km), 1min rest`,hard:true,qKm:Math.floor(km),label:'Threshold',paceLabel:paceLabels.T+'/km'}
+        :{t:'Tempo',d:`${Math.round(km*paces.T/60)}min @ Threshold (${paceLabels.T}/km)`,hard:true,qKm:Math.floor(km*10)/10,label:'Tempo',paceLabel:paceLabels.T+'/km'};},
+    I:()=>{const km=Math.min(share.I,7,CAP.I);
+      const mins=km*paces.I/60;
+      const repMin=mins>=16?4:3;
+      const reps=Math.max(3,Math.round(mins/repMin));
+      const note=mins<15?' (short session - volume-limited)':'';
+      return{t:'Intervals',d:`${reps} x ${repMin}min @ Interval pace (${paceLabels.I}/km), equal-time jog recovery${note}`,
+             hard:true,qKm:Math.floor(km*10)/10,label:'Intervals',paceLabel:paceLabels.I+'/km'};},
+    RP:()=>{const km=Math.min(share.RP,8,CAP.RP,C.raceKm);
+      const desc = C.raceKm<=10
+        ? `${Math.max(3,Math.round(km))} x 1km @ Goal pace (${paceLabels.RP}/km), 90s jog`
+        : `${km.toFixed(1)}km @ Goal pace (${paceLabels.RP}/km)`;
+      return {t:'Race-pace',d:desc,hard:true,
+        qKm: C.raceKm<=10 ? Math.max(3,Math.round(km)) : Math.floor(km*10)/10,
+        label:'Race-pace',paceLabel:paceLabels.RP+'/km'};},
+    R:()=>{const km=Math.min(share.R,3,CAP.R);
+      return{t:'Reps',d:`${Math.max(6,Math.round(km/0.2))} x 200m @ Rep pace (${paceLabels.R}/km), 2-3x rep duration recovery`,
+        hard:true,qKm:Math.floor(km*10)/10,label:'Reps',paceLabel:paceLabels.R+'/km'};},
+  };
+  for(const k of order) if(share[k]!==undefined) out.push(build[k]());
+  return out.slice(0,Math.min(C.maxQuality,deload?1:(slots||C.maxQuality)));
+}
+
+function planPlaceableSlots(i,isRace){
+  const li=planDayIdx(i.longDay), rest=7-i.runDays, restDays=[];
+  if(rest>0)restDays.push(planWrapDay(li+1));
+  while(restDays.length<rest){let bd=null,bs=-1;
+    for(let k=0;k<7;k++){if(k===li||restDays.includes(k))continue;
+      let sc=Math.min(...restDays.map(c=>planDayGap(c,k)),planDayGap(li,k));
+      if(restDays.some(c=>planDayGap(c,k)===1))sc-=0.5;
+      if(sc>bs){bs=sc;bd=k;}}restDays.push(bd);}
+  const runnable=PLAN_DAYS.map((d,k)=>k).filter(k=>!restDays.includes(k)&&(isRace||k!==li));
+  const used=[];
+  for(const k of runnable.filter(k=>planDayGap(k,li)>=2).sort((a,b)=>planDayGap(b,li)-planDayGap(a,li)))
+    if(used.every(u=>planDayGap(u,k)>=2))used.push(k);
+  return Math.max(1,used.length);
+}
+
+function planSchedule(i,C,q,lr,vol,deload,isRace,rpKm,paceLabels){
+  const s={};PLAN_DAYS.forEach(d=>s[d]={run:null,lift:null});
+  const li=planDayIdx(i.longDay), rest=7-i.runDays, restDays=[];
+  if(rest>0)restDays.push(planWrapDay(li+1));
+  while(restDays.length<rest){let bd=null,bs=-1;
+    for(let k=0;k<7;k++){if(k===li||restDays.includes(k))continue;
+      let sc=Math.min(...restDays.map(c=>planDayGap(c,k)),planDayGap(li,k));
+      if(restDays.some(c=>planDayGap(c,k)===1))sc-=0.5;
+      if(sc>bs){bs=sc;bd=k;}}restDays.push(bd);}
+  const runnable=PLAN_DAYS.filter((_,k)=>!restDays.includes(k));
+  if(!isRace)s[i.longDay].run={t:'Long run',km:lr,hard:true,qKm:rpKm,
+    detail:rpKm?`final ${rpKm}km @ Goal pace (${paceLabels.RP}/km)`:'Steady, easy effort',
+    label:'Long run',paceLabel:paceLabels.E};
+  const used=[];
+  for(const x of q){
+    const c=runnable.map(d=>({d,k:planDayIdx(d)})).filter(c=>!s[c.d].run&&planDayGap(c.k,li)>=2)
+      .filter(c=>used.every(u=>planDayGap(u,c.k)>=2)).sort((a,b)=>planDayGap(b.k,li)-planDayGap(a.k,li))[0];
+    if(c){s[c.d].run={t:x.t,detail:x.d,hard:x.hard,qKm:x.qKm,label:x.label,paceLabel:x.paceLabel};used.push(c.k);}}
+  for(const d of runnable)if(!s[d].run)s[d].run={t:'Easy',hard:false,qKm:0,detail:'Conversational effort throughout',label:'Easy',paceLabel:paceLabels.E};
+  const ed=runnable.filter(d=>s[d].run.t!=='Long run');
+  const ek=Math.max(0,vol-(isRace?0:lr));
+  ed.forEach(d=>s[d].run.km=Math.round(ek/ed.length));
+
+  if(i.lifting && i.strengthSessions && i.strengthSessions.length){
+    const allSessions = i.strengthSessions;
+    const legKeys = i.strengthLegSessionKeys || [];
+    const isLegSession = (name) => legKeys.includes(name);
+    const sessions = (deload || isRace) && allSessions.length >= 3
+      ? allSessions.slice(0, allSessions.length - 1)
+      : allSessions.slice();
+    for(const L of sessions){
+      const c=PLAN_DAYS.filter(d=>!s[d].lift).map(d=>{const k=planDayIdx(d),nx=PLAN_DAYS[planWrapDay(k+1)];let sc=0;
+        if(isLegSession(L)){if(s[nx].run&&s[nx].run.hard)sc-=10;if(s[d].run&&s[d].run.hard)sc-=6;
+          if(s[d].run&&s[d].run.t==='Long run')sc-=10;}
+        else if(s[d].run&&s[d].run.hard)sc-=1;return{d,sc};}).sort((a,b)=>b.sc-a.sc);
+      if(c[0]){
+        s[c[0].d].lift=L;
+        if(s[c[0].d].run && s[c[0].d].run.hard){
+          s[c[0].d].liftWarning = 'Also a hard running day \u2014 consider an easier lift, or go by feel.';
+        }
+      }
+    }
+  }
+  return s;
+}
+
+function planTaperLength(i,C){
+  const byDistance={marathon:3,half:2,'10k':2,'5k':2}[i.distance];
+  if(i.weeks<=8) return Math.min(byDistance,2);
+  if(i.weeks>=16&&i.distance==='marathon') return 3;
+  return byDistance;
+}
+function planTaperVolumeFactor(t,taperW){ return Math.pow(0.40,t/taperW); }
+const planTOrNull=(w,structW)=>w-structW;
+function planTaperQuality(vol,C,paces,paceLabels,t,taperW){
+  const isRaceWeek=t>=taperW;
+  const budget=vol*(1-C.easyMin);
+  const km=Math.min(budget, isRaceWeek?2.5:4, C.raceKm*0.30, vol*0.10);
+  if(km<0.8) return [{t:'Easy + strides',d:'4 x 20s strides',hard:false,qKm:0,label:'Easy + strides',paceLabel:null}];
+  const reps=Math.max(2,Math.round(km));
+  return [{t:'Race-pace touch',d:`${reps} x 1km @ Goal pace (${paceLabels.RP}/km), 90s jog`,
+           hard:true,qKm:Math.floor(km*10)/10,label:'Race-pace touch',paceLabel:paceLabels.RP+'/km'}];
+}
+
+function planGenerate(i){
+  const C=DIST[i.distance];
+  const{peak,binding}=derivePeak(i,C);
+  const taperW=planTaperLength(i,C);
+  const structW=i.weeks-taperW;
+  const baseW=(C.volumeMode!=='flat'&&structW>PLAN_R.BASE_TRIGGER)?structW-PLAN_R.BASE_TRIGGER:0;
+  const buildW=structW-baseW;
+  const ceil=lrCeiling(i,peak,C), line=lrLine(i,buildW,ceil);
+  const weeks=[];
+  for(let w=1;w<=i.weeks;w++){
+    const isBase=w<=baseW,isTaper=w>structW,isRace=w===i.weeks,bw=w-baseW;
+    let vol,label,deload=false,ph,lr,rpKm=0;
+    if(isBase){ph='base';vol=i.recentWeeklyKm+(peak*0.55-i.recentWeeklyKm)*((w-1)/Math.max(1,baseW-1));
+      deload=(w%planDeloadCadence(i)===0);if(deload)vol*=planDeloadDepth(w,baseW);label=deload?'Base (deload)':'Base';
+      lr=Math.round(Math.min(i.recentLongestKm+w*0.5,ceil*0.8));}
+    else if(!isTaper){ph=planPhaseOf(bw,buildW);
+      const st=baseW?peak*0.55:i.recentWeeklyKm;
+      vol = C.volumeMode==='flat'
+        ? st+(peak-st)*Math.min(1,(bw-1)/Math.max(1,buildW*0.33))
+        : st+(peak-st)*((bw-1)/Math.max(1,buildW-1));
+      deload=((bw%planDeloadCadence(i)===0)||(i.earlyDeloadWeeks||[]).includes(w))&&bw<buildW;
+      if(deload)vol*=planDeloadDepth(bw,buildW);
+      label=deload?'Build (deload)':`Build (${ph})`;
+      lr=deload?Math.round(line[Math.max(0,bw-3)]):line[bw-1];
+      if(ph==='late'&&!deload&&C.rpInLongRun){const st2=Math.floor(buildW*0.70);
+        rpKm=Math.round(lr*(0.20+0.20*((bw-st2)/Math.max(1,buildW-st2))));
+        rpKm=Math.min(rpKm,Math.max(0,Math.round(vol*(1-C.easyMin))-4));}}
+    else{const t=w-structW;ph='taper';
+      vol=peak*planTaperVolumeFactor(t,taperW);label=`Taper ${t}`;
+      lr=isRace?0:Math.round(Math.min(line[buildW-1]*(taperW===2?0.55:[0.60,0.45][t-1]),vol*0.45));
+      rpKm=isRace?0:Math.round(lr*0.25);}
+    vol=Math.round(vol);
+    if(!isRace) lr=Math.min(lr,Math.floor(vol*C.lrPctGuard));
+    if(!isTaper&&weeks.length){
+      const prevMax=Math.max(...weeks.map(x=>x.lr),i.recentLongestKm);
+      lr=Math.min(lr,prevMax+PLAN_R.LR_WEEKLY_GAIN+0.5);
+    }
+    const slots=planPlaceableSlots(i,isRace);
+    const q=isTaper?planTaperQuality(vol,C,i.paces,i.paceLabels,planTOrNull(w,structW),taperW)
+                   :planQuality(ph,deload,i.paces,i.paceLabels,vol,rpKm,C,slots);
+    const s=planSchedule(i,C,q,lr,vol,deload,isRace,rpKm,i.paceLabels);
+    const qKm=PLAN_DAYS.reduce((a,d)=>a+(s[d].run?(s[d].run.qKm||0):0),0);
+    weeks.push({w,label,vol,lr,rpKm,ph,s,qKm,easyShare:1-qKm/vol,
+      hard:PLAN_DAYS.filter(d=>s[d].run&&s[d].run.hard).length});
+  }
+  return{peak,binding,buildW,baseW,taperW,ceil,weeks,C};
+}
+
+function planFeasibility(i){
+  const C=DIST[i.distance];const{peak,binding}=derivePeak(i,C);const ceil=lrCeiling(i,peak,C);const o=[];
+  if(i.weeks<C.minWeeks)o.push({level:'warn',msg:`Only ${i.weeks} weeks; ${C.minWeeks}+ recommended.`});
+  if(binding==='days'&&i.runDays<5)o.push({level:'action',msg:'Running days are limiting peak volume.'});
+  const lrTargetMin=i.distance==='half'?C.raceKm*0.75:25;
+  if(i.distance==='half'&&peak<32)o.push({level:'warn',msg:`Peak volume ${peak}km/wk is below the >32km/wk associated with faster half marathon times.`});
+  if(C.volumeMode==='flat'&&peak<C.raceKm*3.5)o.push({level:'warn',msg:`Peak volume ${peak}km/wk is low for a ${i.distance} build.`});
+  if(ceil<lrTargetMin&&C.volumeMode==='build')o.push({level:'warn',msg:`Longest run tops out at ${ceil}km; ~${Math.round(lrTargetMin)}km recommended.`});
+  return{peak,binding,ceil,issues:o,ok:o.length===0};
+}
+
+// ---- Adapter: category bridge (new richer session types -> the 5 original CSS/colour
+// buckets), calendar anchoring, and literal race-day placement. ----
+const CATEGORY_BY_T = {
+  'Long run':'Long', 'Easy':'Easy', 'Easy + strides':'Easy',
+  'Threshold reps':'Tempo', 'Tempo':'Tempo', 'Race-pace touch':'Tempo',
+  'Intervals':'Interval', 'Reps':'Interval', 'Race-pace':'Tempo',
+};
+function bridgePlanDay(run, lift, liftWarning){
+  const out = { lift: lift||null, liftWarning: liftWarning||null };
+  if(!run) return { ...out, type:null };
+  return {
+    ...out,
+    type: CATEGORY_BY_T[run.t] || 'Easy',
+    km: run.km, detail: run.detail || '', label: run.label || run.t,
+    paceLabel: run.paceLabel || null, qKm: run.qKm || 0, hard: !!run.hard,
+  };
+}
+
+function generateFullPlanV2(goalType, raceDateStr, profile, ctx){
+  const distMap = { Marathon:'marathon', Half:'half', '10K':'10k', '5K':'5k' };
+  const distance = distMap[goalType] || 'marathon';
+  const C = DIST[distance];
+
+  const todayStr = toLocalISO(new Date());
+  const mondayStart = mondayOnOrBefore(todayStr);
+  const raceMonday = mondayOnOrBefore(raceDateStr);
+  const weeks = Math.max(1, Math.round((new Date(raceMonday) - new Date(mondayStart)) / (7*86400000)) + 1);
+
+  const runDays = Math.min(6, Math.max(3, (profile.availableDays && profile.availableDays.length) || 4));
+  const longDay = (profile.availableDays && profile.availableDays.includes(profile.preferredLongDay))
+    ? profile.preferredLongDay : (profile.preferredLongDay || 'Sat');
+  const injuryFlag = !!(profile.injuryFlags && profile.injuryFlags.length);
+  const distanceM = { marathon:42195, half:21097.5, '10k':10000, '5k':5000 }[distance];
+
+  let vdot;
+  if(profile.justFinish && profile.easyPace){
+    const parts = String(profile.easyPace).split(':').map(Number);
+    const easyPaceSec = (parts[0]||0)*60 + (parts[1]||0);
+    vdot = deriveVdotFromEasyPace(easyPaceSec);
+  } else {
+    vdot = vdotFromRace(distanceM, ctx.goalTimeSec/60);
+  }
+  const z = {
+    easySlow: 60000/velocityForVO2(0.59*vdot),
+    easyFast: 60000/velocityForVO2(0.74*vdot),
+    threshold: 60000/velocityForVO2(pctMaxForDuration(60)*vdot),
+    interval: 60000/velocityForVO2(pctMaxForDuration(11)*vdot),
+    repetition: 60000/velocityForVO2(1.05*vdot),
+  };
+  const goalPaceSec = 60000/(distanceM/timeForDistance(vdot,distanceM));
+  const paces = { T:z.threshold, I:z.interval, R:z.repetition };
+  const paceLabels = {
+    E: `${fmtPace(z.easyFast)}\u2013${fmtPace(z.easySlow)}`,
+    T: fmtPace(z.threshold), I: fmtPace(z.interval), R: fmtPace(z.repetition),
+    RP: fmtPace(goalPaceSec),
+  };
+  const easyPaceSecForCap = (z.easyFast+z.easySlow)/2;
+
+  const effVol = effectiveRecentWeeklyKm(distance, profile.experienceLevel, ctx.recentWeeklyKm);
+  const effLR = effectiveRecentLongestKm(ctx.recentLongestKm, effVol);
+
+  const input = {
+    distance, weeks, runDays, longDay, experience: profile.experienceLevel,
+    recentWeeklyKm: effVol, recentLongestKm: effLR, injuryFlag,
+    lifting: !!profile.lifting,
+    strengthSessions: ctx.strengthSessions || null,
+    strengthLegSessionKeys: ctx.strengthLegSessionKeys || null,
+    easyPace: easyPaceSecForCap, paces, paceLabels,
+  };
+
+  const feas = planFeasibility(input);
+  const p = planGenerate(input);
+  const raceDow = PLAN_DAYS[(new Date(raceDateStr+'T00:00:00').getDay()+6)%7];
+
+  const outWeeks = p.weeks.map((w, idx) => {
+    const monday = addDays(mondayStart, idx*7);
+    const isFinalWeek = idx === p.weeks.length-1;
+    const days = {};
+    PLAN_DAYS.forEach(d => {
+      if(isFinalWeek && d === raceDow){
+        days[d] = { type:'Race', km: C.raceKm, detail:'Race day \u2014 go get it.', label:'Race day', paceLabel:null, qKm:0, hard:true, lift:null, liftWarning:null };
+        return;
+      }
+      const cell = w.s[d];
+      days[d] = bridgePlanDay(cell.run, cell.lift, cell.liftWarning);
+    });
+    return { weekNum: idx+1, monday, note: w.label, days };
+  });
+
+  return { weeks: outWeeks, feasibility: feas, peak: p.peak, ceil: p.ceil, vdot };
+}
+
+// ---- Same external contract as before: generateFullPlan(goalType, raceDateStr, profile)
+// returns just the weeks array, so every existing caller works unchanged. Internally now
+// reads Strava data, the configured strength split, and the goal time from wherever they
+// actually live in app state, and surfaces feasibility warnings before returning. ----
 function generateFullPlan(goalType, raceDateStr, profile){
   profile = profile || {};
-  const availableDays = (profile.availableDays && profile.availableDays.length>=3) ? profile.availableDays : ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-  const preferredLongDay = profile.preferredLongDay || 'Sat';
-  const experienceLevel = profile.experienceLevel || 'consistent';
-  const injuryFlags = profile.injuryFlags || [];
-  const lifting = !!profile.lifting;
 
-  const tmpl = PLAN_TEMPLATES[goalType] || PLAN_TEMPLATES.Marathon;
-
-  let peakKmMultiplier = 1;
-  if(injuryFlags.length > 0) peakKmMultiplier *= 0.85;
-  if(lifting) peakKmMultiplier *= 0.93;
-  const peakWeeklyKm = Math.round(tmpl.peakWeeklyKm * peakKmMultiplier);
-  const peakLongKm = Math.round(tmpl.peakLongKm * (injuryFlags.length>0 ? 0.9 : 1));
-
-  let easyBaseFraction = 0.3;
-  if(experienceLevel === 'new') easyBaseFraction += 0.15;
-  if(experienceLevel === 'experienced') easyBaseFraction -= 0.1;
-  if(injuryFlags.length > 0) easyBaseFraction += 0.1;
-  easyBaseFraction = Math.min(0.6, Math.max(0.15, easyBaseFraction));
-
-  const mondayStart = mondayOnOrBefore(toLocalISO(new Date()));
-  const raceMonday = mondayOnOrBefore(raceDateStr);
-  const totalWeeks = Math.round((new Date(raceMonday) - new Date(mondayStart)) / (7*86400000)) + 1;
-  if(totalWeeks < 1) return generateBlankPlanWeeks(raceDateStr);
-
-  const structuredWeeks = Math.min(totalWeeks, tmpl.idealWeeks);
-  const MAX_BASE_WEEKS = 40;
-  const baseWeeks = Math.min(Math.max(0, totalWeeks - structuredWeeks), MAX_BASE_WEEKS);
+  const goalTimeStr = profile.goalTimeStr
+    || (document.getElementById('goalTime') ? document.getElementById('goalTime').value : null)
+    || '3:45:00';
+  const goalTimeSec = parseHMS(goalTimeStr);
 
   const recentKms = weeklyData.weekly.slice(-6).map(w=>w.km).filter(k=>k>0);
-  const recentAvg = recentKms.length ? recentKms.reduce((a,b)=>a+b,0)/recentKms.length : null;
-  let genericStart = { Marathon:25, Half:18, '10K':14, '5K':12 }[goalType] || 20;
-  if(experienceLevel === 'new') genericStart = Math.round(genericStart*0.7);
-  const startKm = Math.round(recentAvg ? Math.max(genericStart*0.5, Math.min(recentAvg, peakWeeklyKm*0.7)) : genericStart);
+  const recentWeeklyKm = recentKms.length ? recentKms.reduce((a,b)=>a+b,0)/recentKms.length : 0;
+  const recentLongestKm = weeklyData.recent.length ? Math.max(...weeklyData.recent.map(r=>r.km)) : 0;
 
-  const weeks = [];
-  let monday = mondayStart;
+  // Strength placement only engages if a program has actually been set up - "I'm lifting"
+  // alone doesn't say which split/days, so there's nothing safe to schedule around yet.
+  const strengthSessions = strengthProfileGlobal ? getStrengthSessions() : null;
+  const legKeyMap = { upperLowerCore:['Lower'], upperLower:['Lower'], pushPullLegs:['Legs'], fullBody:['Full Body'] };
+  const strengthLegSessionKeys = strengthProfileGlobal ? (legKeyMap[strengthProfileGlobal.split] || []) : null;
 
-  for(let i=0; i<baseWeeks; i++){
-    const frac = baseWeeks<=1 ? 1 : i/(baseWeeks-1);
-    const km = Math.round(startKm + (peakWeeklyKm*0.55 - startKm) * frac * 0.6);
-    weeks.push(buildBaseWeek(monday, Math.max(startKm, km), availableDays, preferredLongDay));
-    monday = addDays(monday, 7);
+  const ctx = { goalTimeSec, recentWeeklyKm, recentLongestKm, strengthSessions, strengthLegSessionKeys };
+
+  let result;
+  try{
+    result = generateFullPlanV2(goalType, raceDateStr, profile, ctx);
+  }catch(e){
+    console.error('New plan generator failed, falling back to a blank scaffold:', e);
+    showStorageWarning('Something went wrong building that plan \u2014 generated a blank week-by-week table instead so nothing is lost. Tell Claude what happened.', true);
+    return generateBlankPlanWeeks(raceDateStr);
   }
 
-  monday = addDays(raceMonday, -7*(structuredWeeks-1));
-
-  const buildWeeks = Math.max(0, structuredWeeks - tmpl.taperWeeks);
-  let qualityIdx = 0;
-  for(let w=0; w<structuredWeeks; w++){
-    const isTaper = w >= buildWeeks;
-    const isFinalRaceWeek = (w === structuredWeeks-1);
-    let weekKm, longKmPct;
-    if(isTaper){
-      const taperWeeksRemaining = structuredWeeks - w;
-      const tableIdx = Math.max(0, tmpl.taperTable.length - taperWeeksRemaining);
-      const taperEntry = tmpl.taperTable[tableIdx];
-      weekKm = Math.round(peakWeeklyKm * taperEntry.weekKmPct);
-      longKmPct = taperEntry.longKmPct;
-    } else {
-      const buildFrac = buildWeeks<=1 ? 1 : w/(buildWeeks-1);
-      weekKm = Math.round(startKm + (peakWeeklyKm - startKm) * buildFrac);
-      if((w+1)%4===0 && w!==buildWeeks-1) weekKm = Math.round(weekKm*0.75);
-      longKmPct = null;
-    }
-    const longKm = longKmPct !== null
-      ? Math.round(peakLongKm * longKmPct)
-      : Math.round(Math.min(peakLongKm, weekKm*0.36));
-    const hasLongRun = !(isTaper && longKmPct === null);
-    const inEasyBasePhase = !isTaper && w < buildWeeks*easyBaseFraction;
-    const qualityType = inEasyBasePhase ? null : tmpl.qualityMix[qualityIdx % tmpl.qualityMix.length];
-    if(qualityType) qualityIdx++;
-    weeks.push(buildStructuredWeek({
-      monday, goalType, weekKm, longKm, hasLongRun, qualityType, isTaper, isFinalRaceWeek, raceDateStr,
-      peakWeeklyKm, fiveDayCapable: tmpl.fiveDayCapable, availableDays, preferredLongDay, experienceLevel,
-    }));
-    monday = addDays(monday, 7);
+  if(result.feasibility.issues.length){
+    const lines = result.feasibility.issues.map(iss => '\u2022 ' + iss.msg).join('\n');
+    alert(`Heads up before this plan gets built:\n\n${lines}\n\nThe plan below is still the best fit for what you've entered \u2014 flagging this rather than hiding it.`);
   }
-
-  if(weeks.length > 0){
-    const todayStr = toLocalISO(new Date());
-    const firstWeek = weeks[0];
-    DAY_KEYS.forEach((dk,i)=>{
-      const dateStr = addDays(firstWeek.monday, i);
-      if(dateStr < todayStr) firstWeek.days[dk] = REST_DAY;
-    });
-  }
-
-  return weeks;
+  return result.weeks;
 }
 
 const DEFAULT_MARATHON_PLAN = [
@@ -1454,7 +1764,7 @@ function getTodaySessionType(){
     if(!planWeek) return null;
     const dayKey = DAY_KEYS[weekDates.indexOf(todayStr)];
     const session = planWeek.days[dayKey];
-    return session ? session.type : 'Rest';
+    return (session && session.type) ? session.type : 'Rest';
   }catch(e){ return null; }
 }
 function getContextMessage(){
@@ -3552,22 +3862,32 @@ async function initPlan(){
   function sessionCardHtml(wi, dayKey, session, weekMonday, dayIndex){
     const dayNames = {Mon:'Mon',Tue:'Tue',Wed:'Wed',Thu:'Thu',Fri:'Fri',Sat:'Sat',Sun:'Sun'};
     const dkey = addDays(weekMonday, dayIndex);
-    if(!session){
+    const liftLine = (s) => s && s.lift
+      ? `<p class="session-detail-text" style="margin-top:6px;color:var(--accent);">+ ${s.lift}${s.liftWarning ? ` &mdash; \u26a0 ${s.liftWarning}` : ''}</p>`
+      : '';
+    if(!session || !session.type){
+      // Rest day, but may still carry a lift session (the new generator can place
+      // strength on an otherwise non-running day).
       return `<div class="session-card type-rest">
         <div class="session-day-name">${dayNames[dayKey]}</div>
-        <div class="session-type-label">Rest</div>
+        <div class="session-type-label">${session && session.lift ? session.lift : 'Rest'}</div>
+        ${session && session.lift && session.liftWarning ? `<p class="session-detail-text" style="color:var(--accent);">\u26a0 ${session.liftWarning}</p>` : ''}
       </div>`;
     }
-    const pace = paceForType(session.type);
+    // label/paceLabel are the richer Stage 2 fields; fall back to the older type-only
+    // shape gracefully for any in-progress plan generated before this change.
+    const displayLabel = session.label || session.type;
+    const pace = session.paceLabel || paceForType(session.type);
     const isDone = !!sessionCompletion[dkey];
     return `<div class="session-card type-${session.type.toLowerCase()} ${isDone?'session-done':''}">
       <div class="session-day-name">${dayNames[dayKey]}</div>
-      <div class="session-type-label">${session.type}</div>
+      <div class="session-type-label">${displayLabel}</div>
       <div class="session-km-row">
         <span class="session-km-display">${session.km}km</span>
         ${pace ? `<span class="session-pace">@ ${pace}</span>` : ''}
       </div>
       <p class="session-detail-text">${session.detail||''}</p>
+      ${liftLine(session)}
       <label class="session-done-label">
         <input type="checkbox" class="session-done-check" data-date="${dkey}" ${isDone?'checked':''}>
         <span>${isDone?'Done':'Mark done'}</span>
@@ -3654,9 +3974,9 @@ async function initPlan(){
       const strengthType = getEffectiveStrengthSchedule()[dk];
 
       let lines = '';
-      if(runSession){
+      if(runSession && runSession.type){
         const isDone = !!sessionCompletion[dkey];
-        const label = runSession.type==='Race' ? 'RACE DAY' : `${runSession.type} \u00b7 ${runSession.km}km`;
+        const label = runSession.type==='Race' ? 'RACE DAY' : `${runSession.label || runSession.type} \u00b7 ${runSession.km}km`;
         const color = ROLE_COLORS[runSession.type] || 'var(--amber)';
         lines += `<label class="week-session-line"><input type="checkbox" class="wk-run-check" data-date="${dkey}" ${isDone?'checked':''}><span style="color:${color};">${label}</span></label>`;
       }
@@ -3834,7 +4154,7 @@ async function initPlan(){
       await savePlanArchive(archive);
     }
 
-    const profile = { experienceLevel, availableDays, preferredLongDay, injuryFlags, lifting, justFinish, easyPace: enteredEasyPace || null };
+    const profile = { experienceLevel, availableDays, preferredLongDay, injuryFlags, lifting, justFinish, easyPace: enteredEasyPace || null, goalTimeStr: newGoalTime };
 
     await storageSetSafe('marathon_plan_v2', JSON.stringify(
       document.getElementById('newBlockBlankToggle').checked
