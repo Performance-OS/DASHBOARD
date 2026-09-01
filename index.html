@@ -105,9 +105,11 @@
   .view.active{display:block;animation:fadeIn .3s ease;}
   @keyframes fadeIn{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
 
-  .refresh-bar{display:flex;align-items:center;gap:9px;margin-bottom:18px;font-size:11px;color:var(--text-dim);letter-spacing:0.04em;}
-  .refresh-bar button{background:none;color:var(--text-dim);border:none;padding:0;cursor:pointer;font-size:11px;font-family:'Inter',sans-serif;font-weight:500;text-decoration:underline;text-decoration-color:transparent;transition:all .15s ease;}
-  .refresh-bar button:hover{color:var(--accent);text-decoration-color:var(--accent);}
+  .refresh-bar{display:flex;flex-direction:column;gap:10px;margin-bottom:18px;}
+  .refresh-bar .status-row{display:flex;align-items:center;gap:9px;font-size:11px;color:var(--text-dim);letter-spacing:0.04em;}
+  .refresh-btn-prominent{width:100%;padding:13px;border-radius:14px;border:1px solid rgba(224,122,74,0.55);background:rgba(224,122,74,0.18);color:#fff;font-family:'Inter',sans-serif;font-weight:500;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;transition:all .18s ease;}
+  .refresh-btn-prominent:hover{background:rgba(224,122,74,0.28);}
+  .refresh-btn-prominent:disabled{opacity:0.5;cursor:default;}
   .dot{width:6px;height:6px;border-radius:50%;background:var(--track);display:inline-block;flex-shrink:0;}
   .dot.err{background:var(--redline);}
   .dot.loading{background:var(--accent);animation:pulse 1s infinite;}
@@ -442,9 +444,11 @@
     </div>
 
     <div class="refresh-bar">
-      <span class="dot" id="statusDot"></span>
-      <span id="statusText">Loading latest Strava data&hellip;</span>
-      <button id="refreshBtn">Refresh</button>
+      <div class="status-row">
+        <span class="dot" id="statusDot"></span>
+        <span id="statusText">Loading latest Strava data&hellip;</span>
+      </div>
+      <button id="refreshBtn" class="refresh-btn-prominent">Refresh from Strava</button>
     </div>
 
     <div class="card">
@@ -953,6 +957,63 @@ function paceZones(vdot){
 /** Race pace at an arbitrary goal distance (not just marathon) - same technique as the
     marathon zone above, generalised. Used for the Half/10K/5K "goal pace" tile. */
 function goalDistancePace(vdot, distanceM){ return (60000) / (distanceM / timeForDistance(vdot, distanceM)); }
+
+/* =========================================================================================
+   HEAT ADJUSTMENT - live weather lookup, wired into both the Race Setup pace display and
+   the plan generator itself (so session text like "21min @ Threshold" reflects a pace that's
+   actually realistic in real conditions, not a lab number). The slowdown table and the choice
+   of which zones it applies to are the same ones verified in the design session - continuous
+   aerobic work only (easy/threshold/long-distance race pace), never short efforts like
+   intervals or reps, which don't accumulate core heat the same way.
+   Uses Open-Meteo (free, no API key) plus the browser's own location - asks once, remembers
+   a decline so it never nags, and silently falls back to no adjustment if denied or offline.
+   ========================================================================================= */
+let heatSlowdownFactorGlobal = 1.0;
+let heatFactorInfo = null; // {tempC, dewC, factor, updatedAt} once resolved, for the transparency note
+
+function dewPointFromTempRH(tempC, rh){
+  const a=17.62, b=243.12;
+  const alpha = Math.log(rh/100) + (a*tempC)/(b+tempC);
+  return (b*alpha)/(a-alpha);
+}
+function heatSlowdownFactor(tempC, dewPointC){
+  const sum = (tempC*9/5+32) + (dewPointC*9/5+32);
+  if(sum<100) return 1.000;
+  if(sum<110) return 1.005;
+  if(sum<120) return 1.010;
+  if(sum<130) return 1.020;
+  if(sum<140) return 1.030;
+  if(sum<150) return 1.045;
+  if(sum<160) return 1.060;
+  if(sum<170) return 1.080;
+  return 1.100;
+}
+async function refreshHeatAdjustment(){
+  try{
+    const declined = await storageGetSafe('heat_location_declined');
+    if(declined && declined.value === 'true') return;
+    const pos = await new Promise((resolve, reject)=>{
+      if(!navigator.geolocation){ reject(new Error('Geolocation not available in this browser')); return; }
+      navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 8000, maximumAge: 3600000 });
+    });
+    const { latitude, longitude } = pos.coords;
+    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m`);
+    if(!res.ok) throw new Error('Weather lookup failed: ' + res.status);
+    const data = await res.json();
+    const tempC = data.current.temperature_2m;
+    const rh = data.current.relative_humidity_2m;
+    const dewC = dewPointFromTempRH(tempC, rh);
+    heatSlowdownFactorGlobal = heatSlowdownFactor(tempC, dewC);
+    heatFactorInfo = { tempC, dewC, factor: heatSlowdownFactorGlobal, updatedAt: new Date().toISOString() };
+    if(window._refreshHeatZones) window._refreshHeatZones();
+  }catch(e){
+    console.warn('Heat adjustment unavailable (location declined, or the lookup failed) - paces shown without a heat adjustment:', e);
+    if(e && e.code === 1){ // GeolocationPositionError.PERMISSION_DENIED - remember it, never nag again
+      try{ await storageSetSafe('heat_location_declined', 'true'); }catch(e2){}
+    }
+  }
+}
+
 
 const ZONE_OFFSETS_BY_GOAL_TYPE = {
   Marathon: { easy: 70, long: 45, tempo: -10, interval: -55 },
@@ -1539,7 +1600,14 @@ function generateFullPlanV2(goalType, raceDateStr, profile, ctx){
     interval: 60000/velocityForVO2(pctMaxForDuration(11)*vdot),
     repetition: 60000/velocityForVO2(1.05*vdot),
   };
-  const goalPaceSec = 60000/(distanceM/timeForDistance(vdot,distanceM));
+  // Same heat adjustment as the zone display, applied here too so the plan's own session
+  // text ("21min @ Threshold") reflects a pace that's actually realistic in real conditions -
+  // continuous aerobic zones only, never interval/repetition pace.
+  const hf = heatSlowdownFactorGlobal;
+  z.easySlow *= hf; z.easyFast *= hf; z.threshold *= hf;
+  const isLongContinuousGoal = (distance === 'marathon' || distance === 'half');
+  let goalPaceSec = 60000/(distanceM/timeForDistance(vdot,distanceM));
+  if(isLongContinuousGoal) goalPaceSec *= hf;
   const paces = { T:z.threshold, I:z.interval, R:z.repetition };
   const paceLabels = {
     E: `${fmtPace(z.easyFast)}\u2013${fmtPace(z.easySlow)}`,
@@ -3885,13 +3953,32 @@ async function initPlan(){
     const z = paceZones(vdot);
     const goalPace = goalTypeGlobal === 'Marathon' ? z.marathon : goalDistancePace(vdot, distM);
 
+    // Heat adjustment: continuous aerobic zones only (easy, threshold, and marathon/half goal
+    // pace - long enough efforts that heat genuinely matters). Never applied to interval or
+    // repetition pace - short efforts don't accumulate core heat the same way.
+    const hf = heatSlowdownFactorGlobal;
+    const isLongContinuousGoal = (goalTypeGlobal === 'Marathon' || goalTypeGlobal === 'Half');
+    const easySlowAdj = z.easySlow * hf, easyFastAdj = z.easyFast * hf;
+    const thresholdAdj = z.threshold * hf;
+    const goalPaceAdj = isLongContinuousGoal ? goalPace * hf : goalPace;
+
     document.getElementById('zoneGrid').innerHTML = `
-      <div class="zone"><div class="p" style="color:var(--amber)">${fmtPace(z.easyFast)}\u2013${fmtPace(z.easySlow)}</div><div class="l">Easy /km</div></div>
-      <div class="zone"><div class="p" style="color:var(--teal)">${fmtPace(goalPace)}</div><div class="l">${goalTypeGlobal} pace /km</div></div>
-      <div class="zone"><div class="p" style="color:var(--text)">${fmtPace(z.threshold)}</div><div class="l">Threshold /km</div></div>
+      <div class="zone"><div class="p" style="color:var(--amber)">${fmtPace(easyFastAdj)}\u2013${fmtPace(easySlowAdj)}</div><div class="l">Easy /km</div></div>
+      <div class="zone"><div class="p" style="color:var(--teal)">${fmtPace(goalPaceAdj)}</div><div class="l">${goalTypeGlobal} pace /km</div></div>
+      <div class="zone"><div class="p" style="color:var(--text)">${fmtPace(thresholdAdj)}</div><div class="l">Threshold /km</div></div>
       <div class="zone"><div class="p" style="color:var(--rust)">${fmtPace(z.interval)}</div><div class="l">Interval /km</div></div>
       <div class="zone"><div class="p" style="color:var(--clay)">${fmtPace(z.repetition)}</div><div class="l">Repetition /km</div></div>
     `;
+    let heatNote = document.getElementById('heatAdjustmentNote');
+    if(!heatNote){
+      heatNote = document.createElement('p');
+      heatNote.id = 'heatAdjustmentNote';
+      heatNote.className = 'note';
+      document.getElementById('zoneGrid').insertAdjacentElement('afterend', heatNote);
+    }
+    heatNote.textContent = heatFactorInfo
+      ? `Adjusted for current conditions at your location (${Math.round(heatFactorInfo.tempC)}\u00b0C, dew point ${Math.round(heatFactorInfo.dewC)}\u00b0C) \u2014 about ${Math.round((heatFactorInfo.factor-1)*100)}% slower than lab-condition paces on easy/threshold/${goalTypeGlobal==='10K'||goalTypeGlobal==='5K'?'':'goal-'}pace running. Interval and repetition pace are unaffected.`
+      : 'Paces shown are lab-condition (no heat adjustment) \u2014 location access wasn\u2019t available or hasn\u2019t resolved yet.';
 
     // Bridge for Stage 2: the plan generator and session cards below are UNCHANGED in this
     // stage and still expect a single {easy,long,tempo,interval} point-value shape via
@@ -4263,6 +4350,7 @@ async function initPlan(){
   renderMarathonTable();
   renderWeekPlanTile();
   window._replan = function(){ renderMarathonTable(); renderWeekPlanTile(); };
+  window._refreshHeatZones = renderZones;
 }
 /* ---------- Habits tab ---------- */
 const DEFAULT_HABIT_ITEMS = {
@@ -4801,6 +4889,7 @@ async function initHabits(){
 
 (async function(){
   await initAuthGate(); // blocks here until logged in - nothing should load or save before that
+  refreshHeatAdjustment(); // fire-and-forget - resolves in the background, re-renders zones once ready
   try{
     handleStravaRedirectResult();
   }catch(e){ console.error('handleStravaRedirectResult failed:', e); }
@@ -4884,10 +4973,5 @@ async function initHabits(){
   }catch(e){ console.error('renderDailyMotivation failed:', e); }
 })();
 </script>
-<!-- TEMPORARY DEBUG CONSOLE - remove this script tag once the issue is found and fixed.
-     Adds a small floating button (bottom-right) that opens an on-screen console showing
-     every console.log/warn/error, right on the phone, no computer or cable needed. -->
-<script src="https://cdn.jsdelivr.net/npm/eruda"></script>
-<script>eruda.init();</script>
 </body>
 </html>
