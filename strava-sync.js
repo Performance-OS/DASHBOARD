@@ -90,12 +90,15 @@ function buildWeeklyData(activities){
   runs.forEach(a => {
     const date = a.start_date_local.slice(0,10);
     const monday = mondayOnOrBefore(date);
-    if(!byWeek[monday]) byWeek[monday] = {km:0, runs:0};
-    byWeek[monday].km += a.distance/1000;
+    const km = a.distance/1000;
+    if(!byWeek[monday]) byWeek[monday] = {km:0, runs:0, longestKm:0};
+    byWeek[monday].km += km;
     byWeek[monday].runs += 1;
+    byWeek[monday].longestKm = Math.max(byWeek[monday].longestKm, km);
   });
   const weekly = Object.keys(byWeek).sort().map(week => ({
     week, km: Math.round(byWeek[week].km*10)/10, runs: byWeek[week].runs,
+    longestKm: Math.round(byWeek[week].longestKm*10)/10,
   }));
   const recent = runs
     .sort((a,b) => b.start_date_local.localeCompare(a.start_date_local))
