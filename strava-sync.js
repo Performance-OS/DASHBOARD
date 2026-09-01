@@ -39,8 +39,12 @@ function fmtPace(secPerKm){
 }
 
 async function fetchConnectedUsers(){
+  // Filters out the old passcode-keyed strava_auth row(s) left over from before the auth
+  // migration - the Phase 2 migration was deliberately additive (copied data onto the new
+  // account, never deleted the original), so a row with user_id still NULL can genuinely
+  // exist here. Without this filter it gets pulled in and crashes the whole sync.
   const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/kv_store?key=eq.strava_auth&select=user_id,value`,
+    `${SUPABASE_URL}/rest/v1/kv_store?key=eq.strava_auth&user_id=not.is.null&select=user_id,value`,
     { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
   );
   if(!res.ok) throw new Error(`Fetching connected users failed: ${res.status} ${await res.text()}`);
@@ -157,6 +161,12 @@ async function syncOneUser(userId, refreshToken){
 
   let successCount = 0, failCount = 0;
   for(const user of users){
+    if(!user.user_id){
+      // Belt-and-suspenders: shouldn't happen given the query filter above, but a single
+      // bad row should never be able to take down everyone else's sync.
+      console.warn('  Skipping a row with no user_id (likely an old pre-migration leftover)');
+      continue;
+    }
     const label = user.user_id.slice(0, 8) + '...'; // don't print full user ids to a public Actions log
     try{
       const auth = JSON.parse(user.value);
