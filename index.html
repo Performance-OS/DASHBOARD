@@ -2109,7 +2109,13 @@ async function loadStravaSnapshot(){
   }catch(e){ console.warn('Could not load Strava snapshot - showing the last-known fallback data instead:', e); }
 }
 
-const STRAVA_MANUAL_SYNC_URL = 'https://mefuldlvyaorzulrnnyx.supabase.co/functions/v1/strava-manual-sync';
+// URL points at the function's ACTUAL deployed slug ("quick-worker"), not its display
+// name in the Supabase dashboard ("strava-manual-sync") - those are two different things,
+// and the mismatch between them was the whole bug: Supabase lets a function's dashboard
+// label be renamed without ever changing its real routing address, so the old URL here was
+// pointing at nothing, 0 invocations ever reached it. If you ever rename the function's
+// actual slug on Supabase's side to match, update this URL to match that.
+const STRAVA_MANUAL_SYNC_URL = 'https://mefuldlvyaorzulrnnyx.supabase.co/functions/v1/quick-worker';
 let stravaRefreshCooldownUntil = 0;
 // Returns the current session's real access token (a signed JWT proving who's actually
 // logged in), or null if there's no session. Used instead of the anon key alone when calling
