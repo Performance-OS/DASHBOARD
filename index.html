@@ -1428,6 +1428,68 @@ function planFeasibility(i){
   return{peak,binding,ceil,issues:o,ok:o.length===0};
 }
 
+/* =========================================================================================
+   STAGE 3 - permanent structural self-check, run on every real generation inside the app,
+   not just offline. The dominant failure mode across this whole design project was two
+   individually-correct rules combining into a wrong result - a plan that's subtly wrong
+   throws no error, it just quietly trains someone wrong for weeks. This is the in-app net
+   for that. It should essentially never fire (0 issues across 7,680 + 864 test plans) - if
+   it ever does, that's a genuine signal worth reporting back, not routine noise.
+   ========================================================================================= */
+function auditPlanStructure(p, input){
+  const issues = [];
+  const C = p.C;
+
+  const build = p.weeks.filter(w => w.label.startsWith('Build') && !w.label.includes('deload'));
+  for(let k=1; k<build.length; k++){
+    if(build[k].lr < build[k-1].lr) issues.push(`Long run dropped between build weeks ${build[k-1].w} and ${build[k].w} (${build[k-1].lr}km \u2192 ${build[k].lr}km)`);
+    if(build[k].lr - build[k-1].lr > 3.01) issues.push(`Long run jumped more than 3km in one week (week ${build[k].w}: ${build[k-1].lr}km \u2192 ${build[k].lr}km)`);
+  }
+
+  p.weeks.forEach(w => {
+    if(w.easyShare < C.easyMin - 0.005) issues.push(`Week ${w.w} (${w.label}) dropped below the minimum easy-running share (${Math.round(w.easyShare*100)}% vs ${Math.round(C.easyMin*100)}% minimum)`);
+  });
+
+  const raceWeek = p.weeks[p.weeks.length-1];
+  if(input.lifting && input.strengthLegSessionKeys && input.strengthLegSessionKeys.length){
+    PLAN_DAYS.forEach(d => {
+      const cell = raceWeek.s[d];
+      if(cell.lift && input.strengthLegSessionKeys.includes(cell.lift)){
+        issues.push(`A leg-focused strength session (${cell.lift}) is scheduled in race week`);
+      }
+    });
+  }
+
+  p.weeks.forEach(w => {
+    const rd = PLAN_DAYS.filter(d => w.s[d].run).length;
+    if(rd !== input.runDays) issues.push(`Week ${w.w} has ${rd} running days instead of the expected ${input.runDays}`);
+  });
+
+  p.weeks.forEach(w => {
+    const hardIdx = PLAN_DAYS.map((d,k)=>({d,k})).filter(x => w.s[x.d].run && w.s[x.d].run.hard).map(x=>x.k);
+    for(let a=0; a<hardIdx.length; a++) for(let b=a+1; b<hardIdx.length; b++){
+      const g = Math.min(Math.abs(hardIdx[a]-hardIdx[b]), 7-Math.abs(hardIdx[a]-hardIdx[b]));
+      if(g < 2) issues.push(`Week ${w.w} has two hard sessions less than 2 days apart`);
+    }
+  });
+
+  p.weeks.filter(w => w.label.includes('deload')).forEach(w => {
+    PLAN_DAYS.forEach(d => {
+      const run = w.s[d].run;
+      if(run && run.hard && ['Intervals','Reps','Race-pace'].includes(run.t)){
+        issues.push(`Deload week ${w.w} still includes ${run.t.toLowerCase()} work`);
+      }
+    });
+  });
+
+  const taper = p.weeks.filter(w => w.label.startsWith('Taper'));
+  for(let k=1; k<taper.length; k++){
+    if(taper[k].vol > taper[k-1].vol) issues.push(`Taper volume increased from week ${taper[k-1].w} to week ${taper[k].w} instead of decreasing`);
+  }
+
+  return issues;
+}
+
 // ---- Adapter: category bridge (new richer session types -> the 5 original CSS/colour
 // buckets), calendar anchoring, and literal race-day placement. ----
 const CATEGORY_BY_T = {
@@ -1500,6 +1562,7 @@ function generateFullPlanV2(goalType, raceDateStr, profile, ctx){
 
   const feas = planFeasibility(input);
   const p = planGenerate(input);
+  const structuralIssues = auditPlanStructure(p, input);
   const raceDow = PLAN_DAYS[(new Date(raceDateStr+'T00:00:00').getDay()+6)%7];
 
   const outWeeks = p.weeks.map((w, idx) => {
@@ -1517,7 +1580,7 @@ function generateFullPlanV2(goalType, raceDateStr, profile, ctx){
     return { weekNum: idx+1, monday, note: w.label, days };
   });
 
-  return { weeks: outWeeks, feasibility: feas, peak: p.peak, ceil: p.ceil, vdot };
+  return { weeks: outWeeks, feasibility: feas, structuralIssues, peak: p.peak, ceil: p.ceil, vdot };
 }
 
 // ---- Same external contract as before: generateFullPlan(goalType, raceDateStr, profile)
@@ -1553,6 +1616,11 @@ function generateFullPlan(goalType, raceDateStr, profile){
     return generateBlankPlanWeeks(raceDateStr);
   }
 
+  if(result.structuralIssues && result.structuralIssues.length){
+    const lines = result.structuralIssues.map(msg => '\u2022 ' + msg).join('\n');
+    alert(`This plan has been built, but a safety check found something that shouldn't happen:\n\n${lines}\n\nThis is unexpected \u2014 the plan is still usable, but please tell Claude exactly what you entered so this can be fixed properly rather than just training through it.`);
+    console.error('Plan structural audit found issues:', result.structuralIssues);
+  }
   if(result.feasibility.issues.length){
     const lines = result.feasibility.issues.map(iss => '\u2022 ' + iss.msg).join('\n');
     alert(`Heads up before this plan gets built:\n\n${lines}\n\nThe plan below is still the best fit for what you've entered \u2014 flagging this rather than hiding it.`);
@@ -4816,5 +4884,10 @@ async function initHabits(){
   }catch(e){ console.error('renderDailyMotivation failed:', e); }
 })();
 </script>
+<!-- TEMPORARY DEBUG CONSOLE - remove this script tag once the issue is found and fixed.
+     Adds a small floating button (bottom-right) that opens an on-screen console showing
+     every console.log/warn/error, right on the phone, no computer or cable needed. -->
+<script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+<script>eruda.init();</script>
 </body>
 </html>
