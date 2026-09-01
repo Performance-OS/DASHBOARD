@@ -1672,7 +1672,17 @@ function generateFullPlan(goalType, raceDateStr, profile){
 
   const recentKms = weeklyData.weekly.slice(-6).map(w=>w.km).filter(k=>k>0);
   const recentWeeklyKm = recentKms.length ? recentKms.reduce((a,b)=>a+b,0)/recentKms.length : 0;
-  const recentLongestKm = weeklyData.recent.length ? Math.max(...weeklyData.recent.map(r=>r.km)) : 0;
+  // Longest recent run: taken from the same 6-week window as volume above, using each week's
+  // longest single run - NOT the old "longest of the 10 most recent runs" approach, which
+  // could hide a genuinely longer effort from a few weeks back behind several shorter, more
+  // frequent recent runs (exactly the pattern a careful injury build-up tends to produce).
+  // Falls back to the old top-10 method only if a snapshot predates this fix and doesn't have
+  // per-week longestKm yet - self-corrects on the next Strava sync either way.
+  const recentWeeks6 = weeklyData.weekly.slice(-6);
+  const hasLongestKmData = recentWeeks6.some(w => typeof w.longestKm === 'number');
+  const recentLongestKm = hasLongestKmData
+    ? Math.max(0, ...recentWeeks6.map(w => w.longestKm || 0))
+    : (weeklyData.recent.length ? Math.max(...weeklyData.recent.map(r=>r.km)) : 0);
 
   // Strength placement only engages if a program has actually been set up - "I'm lifting"
   // alone doesn't say which split/days, so there's nothing safe to schedule around yet.
