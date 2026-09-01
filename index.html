@@ -1619,8 +1619,8 @@ function generateFullPlanV2(goalType, raceDateStr, profile, ctx){
   const paces = { T:z.threshold, I:z.interval, R:z.repetition };
   const paceLabels = {
     E: `${fmtPace(z.easyFast)}\u2013${fmtPace(z.easySlow)}`,
-    T: fmtPace(z.threshold), I: fmtPace(z.interval), R: fmtPace(z.repetition),
-    RP: fmtPace(goalPaceSec),
+    T: fmtPaceRange(z.threshold), I: fmtPace(z.interval), R: fmtPace(z.repetition),
+    RP: fmtPaceRange(goalPaceSec),
   };
   const easyPaceSecForCap = (z.easyFast+z.easySlow)/2;
 
@@ -1989,6 +1989,17 @@ function fmtPace(secPerKm){
   if(!isFinite(secPerKm) || secPerKm<=0) return '--:--';
   const m = Math.floor(secPerKm/60), s = Math.round(secPerKm%60);
   return `${m}:${s.toString().padStart(2,'0')}`;
+}
+// Presents a pace as a small tolerance band rather than an exact second - matches how
+// continuous-effort paces are actually coached (nobody can, or should try to, hold an exact
+// pace to the second over an easy/threshold/goal-pace run; terrain, wind, and fatigue all
+// move it around regardless). +-5 sec/km is a commonly-used tolerance for this kind of
+// continuous work. Deliberately NOT applied to Interval/Repetition pace - short, controlled
+// efforts genuinely can and should be held to a tighter target.
+function fmtPaceRange(centerSecPerKm, toleranceSec){
+  if(!isFinite(centerSecPerKm) || centerSecPerKm<=0) return '--:--';
+  toleranceSec = toleranceSec || 5;
+  return `${fmtPace(centerSecPerKm - toleranceSec)}\u2013${fmtPace(centerSecPerKm + toleranceSec)}`;
 }
 function daysUntil(dateStr){
   const now = new Date();
@@ -4062,8 +4073,8 @@ async function initPlan(){
 
     document.getElementById('zoneGrid').innerHTML = `
       <div class="zone"><div class="p" style="color:var(--amber)">${fmtPace(easyFastAdj)}\u2013${fmtPace(easySlowAdj)}</div><div class="l">Easy /km</div></div>
-      <div class="zone"><div class="p" style="color:var(--teal)">${fmtPace(goalPaceAdj)}</div><div class="l">${goalTypeGlobal} pace /km</div></div>
-      <div class="zone"><div class="p" style="color:var(--text)">${fmtPace(thresholdAdj)}</div><div class="l">Threshold /km</div></div>
+      <div class="zone"><div class="p" style="color:var(--teal)">${fmtPaceRange(goalPaceAdj)}</div><div class="l">${goalTypeGlobal} pace /km</div></div>
+      <div class="zone"><div class="p" style="color:var(--text)">${fmtPaceRange(thresholdAdj)}</div><div class="l">Threshold /km</div></div>
       <div class="zone"><div class="p" style="color:var(--rust)">${fmtPace(z.interval)}</div><div class="l">Interval /km</div></div>
       <div class="zone"><div class="p" style="color:var(--clay)">${fmtPace(z.repetition)}</div><div class="l">Repetition /km</div></div>
     `;
