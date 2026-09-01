@@ -1172,7 +1172,7 @@ function buildStructuredWeek(opts){
    which boxes were checked. Flagging this plainly rather than quietly shipping a mismatch.
    ========================================================================================= */
 
-const PLAN_DAYS = DAY_KEYS;
+const PLAN_DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 const planDayIdx = d => PLAN_DAYS.indexOf(d), planWrapDay = k => ((k%7)+7)%7;
 const planDayGap = (a,b) => Math.min(Math.abs(a-b), 7-Math.abs(a-b));
 
