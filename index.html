@@ -3198,6 +3198,24 @@ function getStrengthSessions(){ return Object.keys(activeExercises); }
 const DEFAULT_STRENGTH_SCHEDULE = { Mon:'Upper', Wed:'Lower', Fri:'Core' };
 let strengthScheduleGlobal = JSON.parse(JSON.stringify(DEFAULT_STRENGTH_SCHEDULE));
 function getEffectiveStrengthSchedule(){ return strengthProfileGlobal ? strengthScheduleGlobal : {}; }
+// Week-aware version: prefers the ACTUAL lift placement the running plan generated for
+// that specific week (which can shift week to week based on hard-running days) over the
+// old fixed weekly template. Falls back to the static template when there's no matching
+// plan week, or the plan wasn't generated with lifting on at all.
+function getEffectiveStrengthScheduleForWeek(weekMonday){
+  if(!strengthProfileGlobal) return {};
+  const week = marathonPlanGlobal.find(w => w.monday === weekMonday);
+  if(week){
+    const sched = {};
+    let hasAny = false;
+    DAY_KEYS.forEach(dk => {
+      const cell = week.days[dk];
+      if(cell && cell.lift){ sched[dk] = cell.lift; hasAny = true; }
+    });
+    if(hasAny) return sched;
+  }
+  return strengthScheduleGlobal;
+}
 async function loadStrengthSchedule(){ try{ const r = await storageGetSafe('strength_schedule'); return r?JSON.parse(r.value):null; }catch(e){ return null; } }
 async function saveStrengthSchedule(sched){ await storageSetSafe('strength_schedule', JSON.stringify(sched)); }
 const SESSION_LOG_COLORS = { Upper:'#E07A4A', Lower:'#C9633F', Core:'#6EA88C', Push:'#C9633F', Pull:'#6E8AA8', Legs:'#E07A4A', 'Full Body':'#6EA88C' };
@@ -3241,9 +3259,10 @@ function initStrengthSessionLogger(){
     const mondayStr = toLocalISO(monday);
     const dayIndexByName = {Mon:0,Tue:1,Wed:2,Thu:3,Fri:4,Sat:5,Sun:6};
 
-    const scheduledDays = Object.keys(strengthScheduleGlobal).slice().sort((a,b)=>dayIndexByName[a]-dayIndexByName[b]);
+    const weekSchedule = getEffectiveStrengthScheduleForWeek(mondayStr);
+    const scheduledDays = Object.keys(weekSchedule).slice().sort((a,b)=>dayIndexByName[a]-dayIndexByName[b]);
     container.innerHTML = scheduledDays.map(scheduledDay=>{
-      const session = strengthScheduleGlobal[scheduledDay];
+      const session = weekSchedule[scheduledDay];
       const dateStr = addDays(mondayStr, dayIndexByName[scheduledDay]);
       const isDone = isStrengthDone(dateStr, session);
       const color = SESSION_LOG_COLORS[session] || SESSION_LOG_FALLBACK_COLOR;
@@ -3971,7 +3990,8 @@ async function initPlan(){
       const dkey = addDays(week.monday, i);
       const isToday = dkey === todayStr;
       const runSession = week.days[dk];
-      const strengthType = getEffectiveStrengthSchedule()[dk];
+      const strengthType = (runSession && runSession.lift) ? runSession.lift : getEffectiveStrengthScheduleForWeek(week.monday)[dk];
+      const strengthWarning = (runSession && runSession.lift) ? runSession.liftWarning : null;
 
       let lines = '';
       if(runSession && runSession.type){
@@ -3983,7 +4003,7 @@ async function initPlan(){
       if(strengthType){
         const isDone = isStrengthDone(dkey, strengthType);
         const color = SESSION_LOG_COLORS[strengthType] || SESSION_LOG_FALLBACK_COLOR;
-        lines += `<label class="week-session-line"><input type="checkbox" class="wk-strength-check" data-date="${dkey}" data-session="${strengthType}" ${isDone?'checked':''}><span style="color:${color};">${strengthType} (strength)</span></label>`;
+        lines += `<label class="week-session-line"><input type="checkbox" class="wk-strength-check" data-date="${dkey}" data-session="${strengthType}" ${isDone?'checked':''}><span style="color:${color};">${strengthType} (strength)${strengthWarning?' \u26a0':''}</span></label>`;
       }
       if(!runSession && !strengthType) lines = `<div class="cal-plan-role" style="color:var(--text-dim);">Rest</div>`;
 
@@ -4641,7 +4661,7 @@ function renderHome(){
   const planWeek = marathonPlanGlobal.find(w=>w.monday===mondayStr);
   const plannedKm = planWeek ? homeWeekTotal(planWeek) : null;
 
-  const effectiveSchedule = getEffectiveStrengthSchedule();
+  const effectiveSchedule = getEffectiveStrengthScheduleForWeek(mondayStr);
   let strengthDone = 0;
   Object.keys(effectiveSchedule).forEach((dayKey)=>{
     const idx = DAY_KEYS.indexOf(dayKey);
