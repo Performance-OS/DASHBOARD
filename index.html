@@ -2111,6 +2111,23 @@ function renderWeekCalendar(activities){
   }).join('');
   document.getElementById('weekCalendar').innerHTML = html;
 }
+// DEPRECATED for populating #weekCalendar as of the planned/actual pace merge below - this
+// function and renderWeekPlanTile() (defined inside initPlan()) used to BOTH write to the
+// same #weekCalendar element, whichever ran last silently overwriting the other. That was the
+// real cause of the "This Week tile breaks after a Strava refresh" bug - not a timing issue.
+// renderWeekPlanTile() is now the single source of truth for that element and shows both
+// planned and actual pace itself, so nothing should call this function for that purpose
+// anymore. Left defined, not deleted, in case it's ever useful again for something else.
+
+// Looks up a real Strava run on a given date, for showing actual pace/distance once a planned
+// session is marked done - the "planned pace before, actual pace after" merge.
+function findRunActivityForDate(dateStr){
+  const act = (thisWeekActivities||[]).find(a => a.date === dateStr && a.sport_type === 'Run');
+  if(!act) return null;
+  const km = act.dist_m / 1000;
+  const paceSec = km > 0 ? act.time_s / km : 0;
+  return { km: Math.round(km*10)/10, paceLabel: fmtPace(paceSec) };
+}
 
 let thisWeekActivities = [];
 let stravaSyncedAt = null;
@@ -2212,7 +2229,10 @@ async function manualStravaRefresh(){
       if(result.this_week_activities) thisWeekActivities = result.this_week_activities;
       if(result.synced_at) stravaSyncedAt = result.synced_at;
       renderLog();
-      renderWeekCalendar(thisWeekActivities);
+      // NOT renderWeekCalendar(thisWeekActivities) - that was the actual bug (see the note
+      // above renderWeekCalendar's definition). window._replan() re-runs the correct plan+
+      // actual-pace view instead.
+      if(window._replan) window._replan();
       const d = new Date(stravaSyncedAt);
       txt.textContent = 'Synced from Strava ' + d.toLocaleDateString('en-GB',{day:'numeric',month:'short'}) + ' ' + d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
       dot.classList.remove('err');
@@ -4228,8 +4248,17 @@ async function initPlan(){
       let lines = '';
       if(runSession && runSession.type){
         const isDone = !!sessionCompletion[dkey];
-        const label = runSession.type==='Race' ? 'RACE DAY' : `${runSession.label || runSession.type} \u00b7 ${runSession.km}km`;
         const color = ROLE_COLORS[runSession.type] || 'var(--amber)';
+        let label;
+        if(runSession.type === 'Race'){
+          label = 'RACE DAY';
+        } else {
+          const plannedPace = runSession.paceLabel ? ` @ ${runSession.paceLabel}` : '';
+          const actual = isDone ? findRunActivityForDate(dkey) : null;
+          label = actual
+            ? `${runSession.label || runSession.type} \u00b7 ${actual.km}km @ ${actual.paceLabel} (actual)`
+            : `${runSession.label || runSession.type} \u00b7 ${runSession.km}km${plannedPace}`;
+        }
         lines += `<label class="week-session-line"><input type="checkbox" class="wk-run-check" data-date="${dkey}" ${isDone?'checked':''}><span style="color:${color};">${label}</span></label>`;
       }
       if(strengthType){
@@ -4976,9 +5005,10 @@ async function initHabits(){
   try{
     renderLog();
   }catch(e){ console.error('renderLog failed:', e); }
-  try{
-    renderWeekCalendar(thisWeekActivities);
-  }catch(e){ console.error('renderWeekCalendar failed:', e); }
+  // renderWeekCalendar(thisWeekActivities) used to run here, but it was always immediately
+  // overwritten by initPlan()'s own renderWeekPlanTile() call later in this same sequence -
+  // removed entirely rather than left as wasted work (see the deprecation note above
+  // renderWeekCalendar's definition for why it shouldn't populate #weekCalendar at all now).
   try{
     initStatusBar();
   }catch(e){ console.error('initStatusBar failed:', e); }
