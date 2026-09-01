@@ -121,6 +121,7 @@
   .week-session-line{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:500;cursor:pointer;margin-top:7px;}
   .week-session-line input{width:13px;height:13px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;}
   .week-session-line input:checked ~ span{text-decoration:line-through;opacity:0.5;}
+  .week-session-actual{font-size:10px;color:var(--track);margin:2px 0 7px 20px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.02em;}
   .cal-head{display:flex;justify-content:space-between;font-size:10px;color:var(--text-dim);letter-spacing:0.1em;margin-bottom:9px;font-weight:500;text-transform:uppercase;}
   .cal-act{font-size:11px;margin-bottom:5px;line-height:1.3;}
   .cal-run{color:var(--accent);}
@@ -4249,17 +4250,27 @@ async function initPlan(){
       if(runSession && runSession.type){
         const isDone = !!sessionCompletion[dkey];
         const color = ROLE_COLORS[runSession.type] || 'var(--amber)';
-        let label;
         if(runSession.type === 'Race'){
-          label = 'RACE DAY';
+          lines += `<label class="week-session-line"><input type="checkbox" class="wk-run-check" data-date="${dkey}" ${isDone?'checked':''}><span style="color:${color};">RACE DAY</span></label>`;
         } else {
-          const plannedPace = runSession.paceLabel ? ` @ ${runSession.paceLabel}` : '';
-          const actual = isDone ? findRunActivityForDate(dkey) : null;
-          label = actual
-            ? `${runSession.label || runSession.type} \u00b7 ${actual.km}km @ ${actual.paceLabel} (actual)`
-            : `${runSession.label || runSession.type} \u00b7 ${runSession.km}km${plannedPace}`;
+          // Falls back to paceForType() for plans generated before pace labels were stored
+          // per-session (the old flat-offset format) - same fallback sessionCardHtml() already
+          // uses elsewhere, so planned pace shows regardless of which generator built the plan.
+          const plannedPaceLookup = runSession.paceLabel || paceForType(runSession.type);
+          const plannedPace = plannedPaceLookup ? ` @ ${plannedPaceLookup}` : '';
+          const plannedLabel = `${runSession.label || runSession.type} \u00b7 ${runSession.km}km${plannedPace}`;
+          lines += `<label class="week-session-line"><input type="checkbox" class="wk-run-check" data-date="${dkey}" ${isDone?'checked':''}><span style="color:${color};">${plannedLabel}</span></label>`;
+          // Actual pace/distance sits in its OWN element outside the label, deliberately -
+          // the checked-checkbox styling auto-strikes-through and dims anything inside the
+          // label's span, which is right for the planned line but wrong for something new
+          // you actually want to read clearly.
+          if(isDone){
+            const actual = findRunActivityForDate(dkey);
+            if(actual){
+              lines += `<div class="week-session-actual">\u2713 Actual: ${actual.km}km @ ${actual.paceLabel}/km</div>`;
+            }
+          }
         }
-        lines += `<label class="week-session-line"><input type="checkbox" class="wk-run-check" data-date="${dkey}" ${isDone?'checked':''}><span style="color:${color};">${label}</span></label>`;
       }
       if(strengthType){
         const isDone = isStrengthDone(dkey, strengthType);
