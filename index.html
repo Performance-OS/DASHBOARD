@@ -2203,7 +2203,14 @@ async function manualStravaRefresh(){
     } else if(!res.ok || result.error){
       throw new Error(result.error || `HTTP ${res.status}`);
     } else {
-      await loadStravaSnapshot();
+      // Use the data the sync just handed back directly, rather than reading it back from
+      // Supabase a second time - that second read was the actual bug: an immediate re-read
+      // could occasionally catch a stale moment right after the write, self-correcting only
+      // on the next full page load. Using the response we already have removes that risk
+      // entirely, and is faster too (one less round trip).
+      if(result.weekly_data) weeklyData = result.weekly_data;
+      if(result.this_week_activities) thisWeekActivities = result.this_week_activities;
+      if(result.synced_at) stravaSyncedAt = result.synced_at;
       renderLog();
       renderWeekCalendar(thisWeekActivities);
       const d = new Date(stravaSyncedAt);
