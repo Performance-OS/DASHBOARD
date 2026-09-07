@@ -1470,6 +1470,16 @@ function planGenerate(i){
       lr=isRace?0:Math.round(Math.min(line[buildW-1]*(taperW===2?0.55:[0.60,0.45][t-1]),vol*0.45));
       rpKm=isRace?0:Math.round(lr*0.25);}
     vol=Math.round(vol);
+    // Ramp-in for a genuinely unproven starting point: the generic-start number is an
+    // assumption to build TOWARD, not a capability already demonstrated - jumping straight
+    // there in week 1 (as this used to do) isn't a safe beginner progression, regardless of
+    // how conservative the number itself looks. Only touches the first 3 weeks, only when
+    // there's no real logged data at all; anyone with actual Strava history is unaffected.
+    if(i.isGenericStart && !isTaper && w<=3){
+      const ramp=[0.55,0.72,0.88][w-1];
+      vol=Math.round(vol*ramp);
+      lr=Math.round(lr*ramp);
+    }
     if(!isRace) lr=Math.min(lr,Math.floor(vol*C.lrPctGuard));
     if(!isTaper&&weeks.length){
       const prevMax=Math.max(...weeks.map(x=>x.lr),i.recentLongestKm);
@@ -1626,6 +1636,11 @@ function generateFullPlanV2(goalType, raceDateStr, profile, ctx){
 
   const effVol = effectiveRecentWeeklyKm(distance, profile.experienceLevel, ctx.recentWeeklyKm);
   const effLR = effectiveRecentLongestKm(ctx.recentLongestKm, effVol);
+  // True when there was no real Strava-logged volume at all - the generic-start number is an
+  // ASSUMED baseline to build TOWARD, not a demonstrated current capability. planGenerate()
+  // uses this to ramp gently into that assumption over the first few weeks instead of
+  // starting week 1 there directly.
+  const isGenericStart = !(ctx.recentWeeklyKm && ctx.recentWeeklyKm > 0);
 
   const input = {
     distance, weeks, runDays, longDay, experience: profile.experienceLevel,
@@ -1633,7 +1648,7 @@ function generateFullPlanV2(goalType, raceDateStr, profile, ctx){
     lifting: !!profile.lifting,
     strengthSessions: ctx.strengthSessions || null,
     strengthLegSessionKeys: ctx.strengthLegSessionKeys || null,
-    easyPace: easyPaceSecForCap, paces, paceLabels,
+    easyPace: easyPaceSecForCap, paces, paceLabels, isGenericStart,
   };
 
   const feas = planFeasibility(input);
@@ -4089,16 +4104,12 @@ async function initPlan(){
       ? `Adjusted for current conditions at your location (${Math.round(heatFactorInfo.tempC)}\u00b0C, dew point ${Math.round(heatFactorInfo.dewC)}\u00b0C) \u2014 about ${Math.round((heatFactorInfo.factor-1)*100)}% slower than lab-condition paces on easy/threshold/${goalTypeGlobal==='10K'||goalTypeGlobal==='5K'?'':'goal-'}pace running. Interval and repetition pace are unaffected.`
       : 'Paces shown are lab-condition (no heat adjustment) \u2014 location access wasn\u2019t available or hasn\u2019t resolved yet.';
 
-    // Bridge for Stage 2: the plan generator and session cards below are UNCHANGED in this
-    // stage and still expect a single {easy,long,tempo,interval} point-value shape via
-    // currentZonesGlobal. Interim mapping only, superseded once the generator itself moves
-    // to VDOT in Stage 2: Easy -> easy-range midpoint; Long -> the faster edge of the easy
-    // range (long runs historically ran faster than plain easy here, closest VDOT-native
-    // equivalent until MP-embedded long runs are built); Tempo -> Threshold; Interval -> Interval.
+    // Bridge so the old session-card fallback (paceForType, below) shows the right kind of
+    // pace per zone type - true wide range for Easy/Long, narrow tolerance band for Tempo,
+    // precise single value for Interval. Kept as heat-adjusted values, same as the tiles above.
     currentZones = {
-      easy: (z.easyFast + z.easySlow) / 2,
-      long: z.easyFast,
-      tempo: z.threshold,
+      easySlow: easySlowAdj, easyFast: easyFastAdj,
+      tempo: thresholdAdj,
       interval: z.interval,
     };
     currentZonesGlobal = currentZones;
@@ -4124,9 +4135,16 @@ async function initPlan(){
 
   function paceForType(type){
     if(!currentZones) return '';
-    const map = { Easy:'easy', Tempo:'tempo', Interval:'interval', Long:'long' };
-    const key = map[type];
-    return key ? fmtPace(currentZones[key]) + '/km' : '';
+    // Easy/Long: the true wide range (the whole point of a real Easy zone), not a narrowed
+    // band around a collapsed midpoint. Tempo: a realistic tolerance band, same as everywhere
+    // else. Interval: stays a precise single target, deliberately never a range.
+    if(type === 'Easy' || type === 'Long'){
+      return (currentZones.easyFast && currentZones.easySlow)
+        ? `${fmtPace(currentZones.easyFast)}\u2013${fmtPace(currentZones.easySlow)}/km` : '';
+    }
+    if(type === 'Tempo') return currentZones.tempo ? fmtPaceRange(currentZones.tempo) + '/km' : '';
+    if(type === 'Interval') return currentZones.interval ? fmtPace(currentZones.interval) + '/km' : '';
+    return '';
   }
 
   function getWeekForDate(dateStr){
@@ -4336,10 +4354,50 @@ async function initPlan(){
       return `<div class="home-row"><div>
         <div class="t">${block.goalType} \u2014 ${block.raceDate}</div>
         <div class="d">Goal ${block.goalTime} \u00b7 archived ${block.archivedAt.slice(0,10)} \u00b7 ${weeksLogged}/${block.plan.length} weeks had sessions logged</div>
-      </div></div>`;
+      </div>
+      <button class="restore-archived-btn" data-archived-at="${block.archivedAt}" style="background:rgba(122,184,169,0.15);border:1px solid rgba(122,184,169,0.5);color:var(--track);border-radius:10px;padding:7px 14px;font-size:11px;font-family:'Inter',sans-serif;cursor:pointer;white-space:nowrap;">Restore</button></div>`;
     }).join('');
+    document.querySelectorAll('.restore-archived-btn').forEach(btn=>{
+      btn.addEventListener('click', () => restoreArchivedBlock(btn.dataset.archivedAt));
+    });
   }
   renderArchivedBlocks();
+
+  // Restores an archived block back to being the active plan. Matched by archivedAt (a
+  // unique timestamp), not array index - the display list is reversed for newest-first, and
+  // indexing into that directly against the underlying stored array is exactly the kind of
+  // off-by-one mistake worth avoiding entirely rather than being careful about.
+  async function restoreArchivedBlock(archivedAt){
+    const archive = await loadPlanArchive();
+    const idx = archive.findIndex(b => b.archivedAt === archivedAt);
+    if(idx === -1){ alert('Could not find that archived block \u2014 try reloading the page.'); return; }
+    const block = archive[idx];
+    if(!confirm(`Restore the ${block.goalType} block for ${block.raceDate}? Your current active plan will be archived first \u2014 nothing is lost either way.`)) return;
+
+    // Archive the current (about-to-be-replaced) plan first, symmetric with how a new block
+    // archives the old one - so restoring is never a one-way, lossy action.
+    archive.push({
+      goalType: goalTypeGlobal,
+      raceDate: document.getElementById('raceDate').value,
+      goalTime: document.getElementById('goalTime').value,
+      plan: marathonPlanGlobal,
+      sessionCompletion: sessionCompletionGlobal,
+      archivedAt: new Date().toISOString(),
+    });
+    // The restored block is becoming active again, not staying archived - remove it from the
+    // archive list rather than leave a stale duplicate sitting there.
+    archive.splice(idx, 1);
+    await savePlanArchive(archive);
+
+    await storageSetSafe('marathon_plan_v2', JSON.stringify(block.plan));
+    await storageSetSafe('session_completion', JSON.stringify(block.sessionCompletion || {}));
+    await saveVal('race_date', block.raceDate);
+    await saveVal('goal_time', block.goalTime);
+    await saveGoalType(block.goalType);
+
+    alert(`Restored. The page will reload.`);
+    location.reload();
+  }
 
   const newBlockToggle = document.getElementById('toggleNewBlockForm');
   const newBlockForm = document.getElementById('newBlockForm');
