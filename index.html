@@ -730,6 +730,7 @@
 
     <div class="card" id="strengthLogCard">
       <h2>Log Today's Session</h2>
+      <p class="note" style="margin-top:6px;">Defaults to whatever's scheduled today. To log or check a <em>different</em> day, use "This Week in Strength" above \u2014 tick any day there directly, or tap into a session here to log its exercises for any date.</p>
       <div class="legend" id="strengthSessionTabs" style="margin-bottom:0;"></div>
       <div id="strengthSessionBody" style="margin-top:14px;"></div>
     </div>
@@ -1280,6 +1281,15 @@ const PLAN_R = {LR_WEEKLY_GAIN:2.5,BASE_TRIGGER:18,
                            // evidence-backed) 10%/week guideline, consistent with this app's
                            // existing stance of leaning conservative vs. popular convention.
   MIN_RAMP_WEEKS:8,        // don't compress the ramp below a sensible minimum either
+  // How much can total weekly volume jump in a single week, at most? The steady ramp itself
+  // only climbs ~6-9%/week (safe on its own). The problem is specifically deload weeks: a
+  // 24-32% dip below that week's on-trend value, followed by the very next week jumping
+  // straight back to ITS on-trend value - dip and normal step compounding into single-week
+  // jumps of 30-40%+ (seen in testing: up to 18km in one week). This caps that recovery step.
+  // Set a bit above the steady ramp's own rate so deloads keep real depth rather than being
+  // squeezed out entirely, while still well under the jumps that were happening. A reasoned
+  // default, not a hard evidence-backed number - similar status to the other judgment calls here.
+  MAX_WEEKLY_VOL_JUMP_PCT:0.15,
 };
 
 const GENERIC_START_KM = { marathon:25, half:18, '10k':14, '5k':12 };
@@ -1550,16 +1560,31 @@ function planGenerate(i){
   for(let w=1;w<=i.weeks;w++){
     const isBase=w<=baseW,isTaper=w>structW,isRace=w===i.weeks,bw=w-baseW;
     let vol,label,deload=false,ph,lr,rpKm=0;
-    if(isBase){ph='base';vol=i.recentWeeklyKm+(baseTargetVol-i.recentWeeklyKm)*((w-1)/Math.max(1,baseW-1));
-      deload=(w%planDeloadCadence(i)===0);if(deload)vol*=planDeloadDepth(w,baseW);label=deload?'Base (deload)':'Base';
+    if(isBase){ph='base';
+      const baseVolAt = (wv) => i.recentWeeklyKm+(baseTargetVol-i.recentWeeklyKm)*((wv-1)/Math.max(1,baseW-1));
+      vol=baseVolAt(w);
+      deload=(w%planDeloadCadence(i)===0);
+      if(deload){
+        vol*=planDeloadDepth(w,baseW);
+        const nextOnTrackVol = (w<baseW) ? baseVolAt(w+1) : rampStartVol; // last base week hands off into build's own starting point
+        vol = Math.max(vol, nextOnTrackVol/(1+PLAN_R.MAX_WEEKLY_VOL_JUMP_PCT));
+      }
+      label=deload?'Base (deload)':'Base';
       lr=Math.round(Math.min(i.recentLongestKm+w*0.5,ceil*0.8));}
     else if(!isTaper){ph=planPhaseOf(bw,buildW);
       const st=rampStartVol;
-      vol = C.volumeMode==='flat'
-        ? st+(peak-st)*Math.min(1,(bw-1)/Math.max(1,buildW*0.33))
-        : st+(peak-st)*Math.min(1,(bw-1)/Math.max(1,rampW-1));
+      const volAt = (bwv) => C.volumeMode==='flat'
+        ? st+(peak-st)*Math.min(1,(bwv-1)/Math.max(1,buildW*0.33))
+        : st+(peak-st)*Math.min(1,(bwv-1)/Math.max(1,rampW-1));
+      vol = volAt(bw);
       deload=((bw%planDeloadCadence(i)===0)||(i.earlyDeloadWeeks||[]).includes(w))&&bw<buildW;
-      if(deload)vol*=planDeloadDepth(bw,buildW);
+      if(deload){
+        vol*=planDeloadDepth(bw,buildW);
+        // Cap how deep the dip goes so recovery next week can't itself be an unsafe jump -
+        // the same reasoning already applied to the long run's own deload floor.
+        const nextOnTrackVol = volAt(bw+1);
+        vol = Math.max(vol, nextOnTrackVol/(1+PLAN_R.MAX_WEEKLY_VOL_JUMP_PCT));
+      }
       label=deload?'Build (deload)':`Build (${ph})`;
       const onTrack = bw<=rampW ? line[bw-1] : ceil;
       const nextBw=bw+1, nextOnTrack=nextBw<=rampW?line[nextBw-1]:ceil;
@@ -3695,7 +3720,15 @@ function dateHasSession(dateStr, session){
   return exercises.some(ex=>{
     const entry = strengthLogGlobal[ex.name] && strengthLogGlobal[ex.name][dateStr];
     if(!entry) return false;
-    return getEntrySets(entry).length > 0 || !!entry.feeling;
+    const hasData = getEntrySets(entry).length > 0 || !!entry.feeling;
+    if(!hasData) return false;
+    // The same exercise name can appear in more than one session (e.g. independently-picked
+    // prehab exercises across Full Body A/B/C). If we know which session this was actually
+    // logged under, only count it for that one - otherwise logging a set in ONE session marks
+    // every session that happens to share that exercise as done too. Entries logged before
+    // this existed have no recorded session, so fall back to the old name-only match for those.
+    if(entry.session) return entry.session === session;
+    return true;
   });
 }
 function isStrengthDone(dateStr, session){
@@ -3714,8 +3747,16 @@ async function toggleStrengthDone(dateStr, session, checked){
 function initStrengthSessionLogger(){
   const tabsEl = document.getElementById('strengthSessionTabs');
   const sessionNames = getStrengthSessions();
-  let currentSession = sessionNames[0];
-  tabsEl.innerHTML = sessionNames.map((s,i)=>`<span class="strength-session-tab ${i===0?'active':''}" data-session="${s}">${s}</span>`).join('');
+  function todaysScheduledSession(){
+    const today = new Date();
+    const dow = (today.getDay()+6)%7;
+    const monday = new Date(today); monday.setDate(today.getDate()-dow);
+    const weekSchedule = getEffectiveStrengthScheduleForWeek(toLocalISO(monday));
+    const todaySession = weekSchedule[DAY_KEYS[dow]];
+    return (todaySession && sessionNames.includes(todaySession)) ? todaySession : null;
+  }
+  let currentSession = todaysScheduledSession() || sessionNames[0];
+  tabsEl.innerHTML = sessionNames.map((s)=>`<span class="strength-session-tab ${s===currentSession?'active':''}" data-session="${s}">${s}</span>`).join('');
 
   function renderStrengthWeekSummary(){
     const container = document.getElementById('strengthWeekBody');
@@ -3765,7 +3806,7 @@ function initStrengthSessionLogger(){
     for(let i=13;i>=0;i--){ const dt=new Date(today); dt.setDate(today.getDate()-i); days.push(dt); }
     container.innerHTML = days.map(dt=>{
       const dateStr = toLocalISO(dt);
-      const trained = sessionNames.filter(s => dateHasSession(dateStr, s));
+      const trained = sessionNames.filter(s => isStrengthDone(dateStr, s));
       const label = dt.toLocaleDateString('en-GB',{weekday:'short'})[0];
       const isToday = dateStr === toLocalISO(today);
       let bg = 'var(--surface-2)', color = 'var(--text-dim)', display = '';
@@ -3828,6 +3869,7 @@ function initStrengthSessionLogger(){
         delete entry.weight;
         while(entry.sets.length <= setIdx) entry.sets.push('');
         entry.sets[setIdx] = e.target.value;
+        entry.session = currentSession;
         await saveStrengthLog(strengthLogGlobal);
         renderStrengthDaysLog();
         renderStrengthWeekSummary();
@@ -3841,6 +3883,7 @@ function initStrengthSessionLogger(){
         if(!strengthLogGlobal[exName]) strengthLogGlobal[exName] = {};
         if(!strengthLogGlobal[exName][date]) strengthLogGlobal[exName][date] = {};
         strengthLogGlobal[exName][date].feeling = feel;
+        strengthLogGlobal[exName][date].session = currentSession;
         await saveStrengthLog(strengthLogGlobal);
         e.target.parentElement.querySelectorAll('.feel-btn').forEach(b=>b.classList.remove('feel-active'));
         e.target.classList.add('feel-active');
