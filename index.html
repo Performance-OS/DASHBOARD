@@ -701,13 +701,13 @@
           <p class="note" style="margin-top:6px;">Leave unchecked if none apply. Anything checked here swaps out exercises that tend to aggravate that area for gentler alternatives that train the same muscles.</p>
         </div>
         <div class="field" style="margin-top:14px;">
-          <label class="day-toggle"><input type="checkbox" id="strengthRunnerPrehab"><span>Add a Runner Prehab session</span></label>
-          <p class="note" style="margin-top:6px;">A dedicated session covering the tissues running injuries most often show up in: calf/Achilles (eccentric calf raises \u2014 the best-evidenced exercise in sports medicine for this), hamstring (Nordic curls), and hip/glute work (backed specifically for IT band and patellofemoral knee pain, the two most common running knee complaints). A smaller version of this \u2014 one calf + one hip/glute exercise \u2014 is included automatically in any leg-focused session in your split either way; this adds the fuller version as its own session.</p>
+          <label class="day-toggle"><input type="checkbox" id="strengthRunnerPrehab"><span>Add runner-specific injury-prevention work</span></label>
+          <p class="note" style="margin-top:6px;">Covers the tissues running injuries most often show up in: calf/Achilles (eccentric calf raises \u2014 the best-evidenced exercise in sports medicine for this), hamstring (Nordic curls), and hip/glute work (backed specifically for IT band and patellofemoral knee pain, the two most common running knee complaints). Checking this adds a small amount (one calf + one hip/glute exercise) to any leg-focused session in your split, plus a dedicated Runner Prehab session covering all of it in more depth. Leave unchecked for a plain strength split with no running-specific additions \u2014 not everyone using this is training for a run.</p>
         </div>
         <div class="field" style="margin-top:14px;">
           <label>Which day for each session?</label>
           <div class="field-row" id="strengthDayPickers" style="margin-top:8px;flex-wrap:wrap;"></div>
-          <p class="note" style="margin-top:6px;">These are suggested days only, shown on Home and the week view &mdash; logging a session never depends on which day it actually happens. Pick a different day for each one.</p>
+          <p class="note" style="margin-top:6px;">These are fallback days only \u2014 shown on Home, and used if you haven't generated a running plan yet (or generated one without lifting turned on). Once you have a running plan with lifting enabled, the actual calendar placement is decided week-to-week by the plan itself, working around your runs \u2014 not by what you pick here. Logging a session never depends on which day it actually happens either way. Pick a different day for each one.</p>
         </div>
         <button class="feel-btn" id="confirmStrengthSetupBtn" style="color:var(--track);margin-top:14px;">Generate My Program</button>
       </div>
@@ -3280,8 +3280,8 @@ const STRENGTH_MUSCLE_LIBRARY = {
         { name:'Barbell Bench Press', avoid:['shoulder','wrist'] },
         { name:'Incline Barbell Bench Press', avoid:['shoulder','wrist'] },
         { name:'Incline DB Bench Press', avoid:['shoulder','wrist'] },
-        { name:'Overhead Press', avoid:['shoulder'] },
-        { name:'Push Press', avoid:['shoulder','ankle'] },
+        { name:'Overhead Press', avoid:['shoulder','lowerback'] },
+        { name:'Push Press', avoid:['shoulder','ankle','lowerback'] },
         { name:'Close-Grip Bench Press', avoid:['wrist','elbow'] },
         { name:'Dips', avoid:['shoulder','elbow'] },
       ],
@@ -3316,9 +3316,9 @@ const STRENGTH_MUSCLE_LIBRARY = {
       compound: [
         { name:'Barbell Row', avoid:['lowerback'] },
         { name:'Pendlay Row', avoid:['lowerback'] },
-        { name:'Weighted Pull-Up', avoid:['shoulder','elbow'] },
-        { name:'Weighted Chin-Up', avoid:['shoulder','elbow'] },
-        { name:'Seated Cable Row', avoid:['wrist'] },
+        { name:'Weighted Pull-Up', avoid:['shoulder','elbow','lowerback'] },
+        { name:'Weighted Chin-Up', avoid:['shoulder','elbow','lowerback'] },
+        { name:'Seated Cable Row', avoid:['wrist','lowerback'] },
         { name:'Lat Pulldown', avoid:['shoulder'] },
         { name:'T-Bar Row', avoid:['lowerback'] },
         { name:'Chest-Supported Row', avoid:[] },
@@ -3416,7 +3416,7 @@ const STRENGTH_MUSCLE_LIBRARY = {
         { name:'Pallof Press', avoid:[] },
         { name:'90/90 Hip Stretch', avoid:[], weighted:false },
         { name:'Mountain Climbers', avoid:['wrist','shoulder'], weighted:false },
-        { name:'Bicycle Crunch', avoid:['neck'], weighted:false },
+        { name:'Bicycle Crunch', avoid:['neck','lowerback'], weighted:false },
         { name:'Superman', avoid:['lowerback'], weighted:false },
       ],
     },
@@ -3553,7 +3553,7 @@ function baselinePrehabExtras(equipment, injuryFlags, alreadyPicked){
   ].map(prehabToExercise);
 }
 
-function buildStrengthSession(categoryKey, equipment, scheme, counts, experienceLevel, injuryFlags){
+function buildStrengthSession(categoryKey, equipment, scheme, counts, experienceLevel, injuryFlags, includePrehab){
   const lib = STRENGTH_MUSCLE_LIBRARY;
   if(categoryKey === 'Upper'){
     const compoundLib = [...lib.Push[equipment].compound, ...lib.Pull[equipment].compound];
@@ -3564,7 +3564,7 @@ function buildStrengthSession(categoryKey, equipment, scheme, counts, experience
   if(categoryKey === 'Lower'){
     const picked = [...buildStrengthRole(lib.Legs[equipment].compound, 'compound', counts.compound, scheme, injuryFlags),
                     ...buildStrengthRole(lib.Legs[equipment].accessory, 'accessory', counts.accessory, scheme, injuryFlags)];
-    return [...picked, ...baselinePrehabExtras(equipment, injuryFlags, picked)];
+    return includePrehab ? [...picked, ...baselinePrehabExtras(equipment, injuryFlags, picked)] : picked;
   }
   if(categoryKey === 'Core'){
     return buildStrengthRole(lib.Core[equipment].main, 'main', counts.main, scheme, injuryFlags);
@@ -3576,7 +3576,7 @@ function buildStrengthSession(categoryKey, equipment, scheme, counts, experience
   if(categoryKey === 'Legs'){
     const picked = [...buildStrengthRole(lib.Legs[equipment].compound, 'compound', counts.compound, scheme, injuryFlags),
                     ...buildStrengthRole(lib.Legs[equipment].accessory, 'accessory', counts.accessory, scheme, injuryFlags)];
-    return [...picked, ...baselinePrehabExtras(equipment, injuryFlags, picked)];
+    return includePrehab ? [...picked, ...baselinePrehabExtras(equipment, injuryFlags, picked)] : picked;
   }
   if(categoryKey.startsWith('Full Body')){
     const base = [
@@ -3588,7 +3588,7 @@ function buildStrengthSession(categoryKey, equipment, scheme, counts, experience
     const extra = FULL_BODY_EXTRA_BY_EXPERIENCE[experienceLevel] ?? 0;
     if(extra >= 1) base.push(...buildStrengthRole(lib.Legs[equipment].accessory, 'accessory', 1, scheme, injuryFlags));
     if(extra >= 2) base.push(...buildStrengthRole(lib.Push[equipment].isolation, 'isolation', 1, scheme, injuryFlags));
-    return [...base, ...baselinePrehabExtras(equipment, injuryFlags, base)];
+    return includePrehab ? [...base, ...baselinePrehabExtras(equipment, injuryFlags, base)] : base;
   }
   if(categoryKey === 'Runner Prehab'){
     // The comprehensive, opt-in version: covers all four target areas in one dedicated
@@ -3615,7 +3615,7 @@ function generateStrengthProgram(profile){
   const uniqueCategoryKeys = [...new Set(template.sessions.map(s=>s.key))];
   if(profile.runnerPrehab) uniqueCategoryKeys.push('Runner Prehab');
   uniqueCategoryKeys.forEach(key=>{
-    result[key] = buildStrengthSession(key, equipment, scheme, counts, profile.experienceLevel, injuryFlags);
+    result[key] = buildStrengthSession(key, equipment, scheme, counts, profile.experienceLevel, injuryFlags, profile.runnerPrehab);
   });
   return result;
 }
@@ -3699,12 +3699,14 @@ function dateHasSession(dateStr, session){
   });
 }
 function isStrengthDone(dateStr, session){
-  return !!strengthSessionCompletion[dateStr+'_'+session] || dateHasSession(dateStr, session);
+  const key = dateStr+'_'+session;
+  if(Object.prototype.hasOwnProperty.call(strengthSessionCompletion, key)) return strengthSessionCompletion[key];
+  return dateHasSession(dateStr, session);
 }
 async function toggleStrengthDone(dateStr, session, checked){
   const key = dateStr+'_'+session;
-  if(checked) strengthSessionCompletion[key] = true;
-  else delete strengthSessionCompletion[key];
+  strengthSessionCompletion[key] = checked; // always store true/false explicitly - never delete - so
+                                             // "undo" actually overrides auto-detected completion from logged sets
   await saveStrengthSessionCompletion(strengthSessionCompletion);
   updateTrainingPulseIfEnabled();
   try{ renderHome(); }catch(e){ /* Home not ready yet - the end-of-load renderHome() call will catch it */ }
