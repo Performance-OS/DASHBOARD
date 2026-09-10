@@ -701,6 +701,10 @@
           <p class="note" style="margin-top:6px;">Leave unchecked if none apply. Anything checked here swaps out exercises that tend to aggravate that area for gentler alternatives that train the same muscles.</p>
         </div>
         <div class="field" style="margin-top:14px;">
+          <label class="day-toggle"><input type="checkbox" id="strengthRunnerPrehab"><span>Add a Runner Prehab session</span></label>
+          <p class="note" style="margin-top:6px;">A dedicated session covering the tissues running injuries most often show up in: calf/Achilles (eccentric calf raises \u2014 the best-evidenced exercise in sports medicine for this), hamstring (Nordic curls), and hip/glute work (backed specifically for IT band and patellofemoral knee pain, the two most common running knee complaints). A smaller version of this \u2014 one calf + one hip/glute exercise \u2014 is included automatically in any leg-focused session in your split either way; this adds the fuller version as its own session.</p>
+        </div>
+        <div class="field" style="margin-top:14px;">
           <label>Which day for each session?</label>
           <div class="field-row" id="strengthDayPickers" style="margin-top:8px;flex-wrap:wrap;"></div>
           <p class="note" style="margin-top:6px;">These are suggested days only, shown on Home and the week view &mdash; logging a session never depends on which day it actually happens. Pick a different day for each one.</p>
@@ -753,11 +757,7 @@
     <div class="card">
       <h2>Recent Strength Days</h2>
       <div class="habit-week-grid" id="strengthDaysLog"></div>
-      <div class="legend" style="margin-top:12px;margin-bottom:0;">
-        <span><i style="background:var(--accent)"></i>Upper (U)</span>
-        <span><i style="background:var(--clay)"></i>Lower (L)</span>
-        <span><i style="background:var(--track)"></i>Core (C)</span>
-      </div>
+      <div class="legend" id="strengthDaysLegend" style="margin-top:12px;margin-bottom:0;"></div>
       <p class="note">Last 14 days. A day counts as trained if any exercise in that session has a logged set or feel rating for that date.</p>
     </div>
   </div>
@@ -1268,6 +1268,18 @@ const PLAN_R = {LR_WEEKLY_GAIN:2.5,BASE_TRIGGER:18,
   DELOAD_DEPTH_EARLY:0.80, DELOAD_DEPTH_LATE:0.68,
   DELOAD_QUALITY_SCALE_BUILD:0.40,
   DELOAD_QUALITY_SCALE_FLAT:0.60,
+  // A long runway used to spend ALL its surplus time on a slow, linear base-phase ramp -
+  // a 40-week plan reached peak volume only in week 37. Nothing in the design doc requires
+  // that; the evidence there is about RATE of change, not calendar weeks used. These three
+  // constants replace that with: a capped base phase, then a ramp that reaches peak at a
+  // reasoned pace, with any leftover weeks spent holding near peak instead of ramping thinner.
+  MAX_BASE_WEEKS:8,        // base phase capped regardless of how much surplus time exists
+  WEEKLY_GROWTH_CAP:0.08,  // ~8%/week compounding cap on the volume ramp itself. This is a
+                           // reasoned default, not settled science - it's deliberately a bit
+                           // more conservative than the commonly-cited (and not strongly
+                           // evidence-backed) 10%/week guideline, consistent with this app's
+                           // existing stance of leaning conservative vs. popular convention.
+  MIN_RAMP_WEEKS:8,        // don't compress the ramp below a sensible minimum either
 };
 
 const GENERIC_START_KM = { marathon:25, half:18, '10k':14, '5k':12 };
@@ -1292,7 +1304,17 @@ function planDeloadDepth(bw,buildW){
 }
 function derivePeak(i,C){
   const expBase={new:1.25,consistent:1.40,experienced:1.55}[i.experience];
-  const lenBonus=Math.max(0,Math.min(0.55,(i.weeks-10)*0.045));
+  // Runway bonus: longer time-to-race lets a beginner (or anyone starting from a modest
+  // base) build to real volume. The old 0.55 cap topped out at week 22 - a 30 or 40 week
+  // runway got no extra room past that, which is what kept true beginners stuck at a low
+  // ceiling regardless of how much time they had. Raised the cap and let it keep growing
+  // to ~week 34. This is safe because it's still a ONE-TIME, gradual target set before the
+  // block starts - the actual week-to-week climb toward it is still governed by the
+  // separate 2.5km/week long-run cap and the build-phase ramp, so a bigger destination
+  // doesn't mean a faster climb, just a longer one. Consistent with the design doc's own
+  // finding: injury risk tracks the RATE of volume change, not the level, so a longer
+  // runway earning a higher (but still gradually-reached) peak is the intended use of time.
+  const lenBonus=Math.max(0,Math.min(1.10,(i.weeks-10)*0.045));
   const a=i.recentWeeklyKm*(expBase+lenBonus);
   const b=i.runDays*C.maxPerRun[i.runDays];
   const c=i.recentWeeklyKm*(1+0.05*i.weeks);
@@ -1303,8 +1325,8 @@ function derivePeak(i,C){
   return{peak:Math.round(p),binding:bind};
 }
 function lrCeiling(i,peak,C){ return Math.round(Math.min(C.absLR,(C.lrTimeCapMin*60)/i.easyPace,peak*C.lrPctGuard)); }
-function lrLine(i,buildW,ceil){
-  const L=[];let cur=i.recentLongestKm;const pk=buildW-1;
+function lrLine(startLR,buildW,ceil){
+  const L=[];let cur=startLR;const pk=buildW-1;
   for(let w=1;w<=buildW;w++){
     if(w>1){const g=Math.min(PLAN_R.LR_WEEKLY_GAIN,(ceil-cur)/Math.max(1,pk-w+1));cur=Math.min(cur+g,ceil);}
     L.push(Math.round(Math.min(cur,ceil)));}
@@ -1359,8 +1381,9 @@ function planQuality(ph,deload,paces,paceLabels,vol,rpInLR,C,slots){
   return out.slice(0,Math.min(C.maxQuality,deload?1:(slots||C.maxQuality)));
 }
 
-function planPlaceableSlots(i,isRace){
-  const li=planDayIdx(i.longDay), rest=7-i.runDays, restDays=[];
+function planPlaceableSlots(i,isRace,runDaysThisWeek){
+  const rd=runDaysThisWeek||i.runDays;
+  const li=planDayIdx(i.longDay), rest=7-rd, restDays=[];
   if(rest>0)restDays.push(planWrapDay(li+1));
   while(restDays.length<rest){let bd=null,bs=-1;
     for(let k=0;k<7;k++){if(k===li||restDays.includes(k))continue;
@@ -1374,9 +1397,53 @@ function planPlaceableSlots(i,isRace){
   return Math.max(1,used.length);
 }
 
-function planSchedule(i,C,q,lr,vol,deload,isRace,rpKm,paceLabels){
+// How many quality (hard) sessions a week actually wants, before we know its day count.
+// Mirrors the logic planQuality/planTaperQuality use to decide how many sessions to build.
+function planDesiredQualityCount(ph,deload,C){
+  if(ph==='base')return 0;
+  if(ph==='taper')return 1;
+  if(deload)return 1;
+  return C.maxQuality;
+}
+
+// Issue 2 fix: run-day count used to be fixed at whatever the user said they had available,
+// every single week, regardless of that week's actual volume. That's what produced thin,
+// purposeless sessions at low volume (e.g. 6 days of near-identical short Easy runs with no
+// room for quality work). This picks the FEWEST days - starting from a floor of 3, up to
+// the user's stated max availability - that can carry the week's volume in sessions worth
+// running, while still leaving room for that week's quality sessions. Strength training is
+// then scheduled around whatever days actually end up with a run (see planSchedule), not
+// around the user's full availability.
+// Real published plans, at various weekly volumes, use roughly:
+//   Higdon Novice 1: ~64 km/wk peak on 4 days (fixed)      Pfitzinger 18/55: 53-88 km/wk on 4-5 days
+//   Higdon Intermediate 1: ~75 km/wk on 5 days             Pfitzinger 18/70: 87-113 km/wk on 6 days
+//   Hansons (both tiers): 64-101 km/wk on 6 days (fixed)   Pfitzinger 18/87: 105-140 km/wk on 7 days
+// These disagree by up to 2x at the same volume (Higdon vs Hansons at 64 km/wk) - there's no
+// single "correct" answer, different coaches genuinely differ on fewer/bigger vs more/smaller
+// sessions. This table sits at a reasoned midpoint, leaning slightly toward more frequent days
+// since the design doc's own outcome evidence found weekly run COUNT independently correlated
+// with faster marathon times, independent of volume level.
+function planTypicalDaysForVolume(vol){
+  if(vol<40) return 3;
+  if(vol<60) return 4;
+  if(vol<85) return 5;
+  if(vol<110) return 6;
+  return 7;
+}
+function planWeekRunDays(i,C,vol,lr,ph,deload){
+  const maxAvail=i.runDays, minDays=Math.min(3,maxAvail);
+  const desiredQ=planDesiredQualityCount(ph,deload,C);
+  const typical=Math.min(maxAvail,Math.max(minDays,planTypicalDaysForVolume(vol)));
+  for(let d=typical; d<=maxAvail; d++){
+    if(planPlaceableSlots(i,false,d)>=desiredQ) return d; // only go ABOVE the typical day count if quality work needs the room
+  }
+  return maxAvail;
+}
+
+function planSchedule(i,C,q,lr,vol,deload,isRace,rpKm,paceLabels,runDaysThisWeek){
+  const rd=runDaysThisWeek||i.runDays;
   const s={};PLAN_DAYS.forEach(d=>s[d]={run:null,lift:null});
-  const li=planDayIdx(i.longDay), rest=7-i.runDays, restDays=[];
+  const li=planDayIdx(i.longDay), rest=7-rd, restDays=[];
   if(rest>0)restDays.push(planWrapDay(li+1));
   while(restDays.length<rest){let bd=null,bs=-1;
     for(let k=0;k<7;k++){if(k===li||restDays.includes(k))continue;
@@ -1401,10 +1468,19 @@ function planSchedule(i,C,q,lr,vol,deload,isRace,rpKm,paceLabels){
     const allSessions = i.strengthSessions;
     const legKeys = i.strengthLegSessionKeys || [];
     const isLegSession = (name) => legKeys.includes(name);
-    const sessions = (deload || isRace) && allSessions.length >= 3
-      ? allSessions.slice(0, allSessions.length - 1)
+    // Race/deload week: protect against LEG work specifically (that's the point - taper the
+    // thing that competes with recovery), not just whatever happens to be last in the user's
+    // configured list. Only fall back to dropping the last item if every session is leg-focused.
+    const sessions = (deload || isRace) && allSessions.some(isLegSession)
+      ? allSessions.filter(x=>!isLegSession(x))
       : allSessions.slice();
-    for(const L of sessions){
+    // Leg sessions have the tightest placement constraints (must avoid hard running days AND
+    // the day before one), so they need first pick of the week's open days. Placing them last
+    // (in whatever order the user listed sessions) let easier sessions claim genuinely free
+    // rest days first, forcing the leg session onto a hard day even when a real rest day was
+    // still available.
+    const orderedSessions = sessions.slice().sort((a,b)=>(isLegSession(b)?1:0)-(isLegSession(a)?1:0));
+    for(const L of orderedSessions){
       const c=PLAN_DAYS.filter(d=>!s[d].lift).map(d=>{const k=planDayIdx(d),nx=PLAN_DAYS[planWrapDay(k+1)];let sc=0;
         if(isLegSession(L)){if(s[nx].run&&s[nx].run.hard)sc-=10;if(s[d].run&&s[d].run.hard)sc-=6;
           if(s[d].run&&s[d].run.t==='Long run')sc-=10;}
@@ -1443,31 +1519,58 @@ function planGenerate(i){
   const{peak,binding}=derivePeak(i,C);
   const taperW=planTaperLength(i,C);
   const structW=i.weeks-taperW;
-  const baseW=(C.volumeMode!=='flat'&&structW>PLAN_R.BASE_TRIGGER)?structW-PLAN_R.BASE_TRIGGER:0;
+  const baseW=(C.volumeMode!=='flat'&&structW>PLAN_R.BASE_TRIGGER)
+    ?Math.min(PLAN_R.MAX_BASE_WEEKS,structW-PLAN_R.BASE_TRIGGER):0;
   const buildW=structW-baseW;
-  const ceil=lrCeiling(i,peak,C), line=lrLine(i,buildW,ceil);
+  const ceil=lrCeiling(i,peak,C);
+  // Base phase normally targets peak*0.55 by its end. But if someone's CURRENT demonstrated
+  // volume is already at or above that (e.g. fit from another context, new to structured
+  // training specifically), targeting peak*0.55 would ask them to run LESS during the base
+  // phase than they already do, then build back up - backwards, and it broke the long-run
+  // handoff into build (a real regression, caught by testing). The base target is never
+  // allowed below their current volume.
+  const baseTargetVol=Math.max(peak*0.55,i.recentWeeklyKm);
+  // How many weeks does the ramp actually NEED, at a safe pace, to get from wherever the
+  // base phase leaves off up to peak volume and peak long run? Whichever needs more weeks
+  // sets the ramp length - the other one just arrives early and holds. Any build weeks left
+  // over after that become a genuine hold-near-peak phase, not a slower ramp.
+  const rampStartVol=baseW?baseTargetVol:i.recentWeeklyKm;
+  // The base phase (if any) already grows the long run on its own trend (see the 'isBase'
+  // branch below: recentLongestKm + 0.5km/week, capped at 80% of ceiling). The build-phase
+  // line needs to continue from THAT point, not restart from the original pre-block number,
+  // or the transition from base into build creates a false discontinuity (a dip, followed by
+  // what looks like a spike back up) right at the handoff.
+  const rampStartLR=baseW?Math.round(Math.min(i.recentLongestKm+baseW*0.5,ceil*0.8)):i.recentLongestKm;
+  const volGrowth=peak/Math.max(1e-6,rampStartVol);
+  const volRampWeeksNeeded=volGrowth>1?Math.ceil(Math.log(volGrowth)/Math.log(1+PLAN_R.WEEKLY_GROWTH_CAP)):1;
+  const lrRampWeeksNeeded=Math.max(1,Math.ceil(Math.max(0,ceil-rampStartLR)/PLAN_R.LR_WEEKLY_GAIN));
+  const rampW=Math.min(buildW,Math.max(PLAN_R.MIN_RAMP_WEEKS,volRampWeeksNeeded,lrRampWeeksNeeded));
+  const line=lrLine(rampStartLR,rampW,ceil);
   const weeks=[];
   for(let w=1;w<=i.weeks;w++){
     const isBase=w<=baseW,isTaper=w>structW,isRace=w===i.weeks,bw=w-baseW;
     let vol,label,deload=false,ph,lr,rpKm=0;
-    if(isBase){ph='base';vol=i.recentWeeklyKm+(peak*0.55-i.recentWeeklyKm)*((w-1)/Math.max(1,baseW-1));
+    if(isBase){ph='base';vol=i.recentWeeklyKm+(baseTargetVol-i.recentWeeklyKm)*((w-1)/Math.max(1,baseW-1));
       deload=(w%planDeloadCadence(i)===0);if(deload)vol*=planDeloadDepth(w,baseW);label=deload?'Base (deload)':'Base';
       lr=Math.round(Math.min(i.recentLongestKm+w*0.5,ceil*0.8));}
     else if(!isTaper){ph=planPhaseOf(bw,buildW);
-      const st=baseW?peak*0.55:i.recentWeeklyKm;
+      const st=rampStartVol;
       vol = C.volumeMode==='flat'
         ? st+(peak-st)*Math.min(1,(bw-1)/Math.max(1,buildW*0.33))
-        : st+(peak-st)*((bw-1)/Math.max(1,buildW-1));
+        : st+(peak-st)*Math.min(1,(bw-1)/Math.max(1,rampW-1));
       deload=((bw%planDeloadCadence(i)===0)||(i.earlyDeloadWeeks||[]).includes(w))&&bw<buildW;
       if(deload)vol*=planDeloadDepth(bw,buildW);
       label=deload?'Build (deload)':`Build (${ph})`;
-      lr=deload?Math.round(line[Math.max(0,bw-3)]):line[bw-1];
+      const onTrack = bw<=rampW ? line[bw-1] : ceil;
+      const nextBw=bw+1, nextOnTrack=nextBw<=rampW?line[nextBw-1]:ceil;
+      const lrDeloadFloor=nextOnTrack-PLAN_R.LR_WEEKLY_GAIN; // any deeper and next week's recovery would itself be an unsafe jump
+      lr = deload ? Math.round(Math.max(onTrack*planDeloadDepth(bw,buildW),lrDeloadFloor)) : onTrack;
       if(ph==='late'&&!deload&&C.rpInLongRun){const st2=Math.floor(buildW*0.70);
         rpKm=Math.round(lr*(0.20+0.20*((bw-st2)/Math.max(1,buildW-st2))));
         rpKm=Math.min(rpKm,Math.max(0,Math.round(vol*(1-C.easyMin))-4));}}
     else{const t=w-structW;ph='taper';
       vol=peak*planTaperVolumeFactor(t,taperW);label=`Taper ${t}`;
-      lr=isRace?0:Math.round(Math.min(line[buildW-1]*(taperW===2?0.55:[0.60,0.45][t-1]),vol*0.45));
+      lr=isRace?0:Math.round(Math.min(line[line.length-1]*(taperW===2?0.55:[0.60,0.45][t-1]),vol*0.45));
       rpKm=isRace?0:Math.round(lr*0.25);}
     vol=Math.round(vol);
     // Ramp-in for a genuinely unproven starting point: the generic-start number is an
@@ -1485,12 +1588,13 @@ function planGenerate(i){
       const prevMax=Math.max(...weeks.map(x=>x.lr),i.recentLongestKm);
       lr=Math.min(lr,prevMax+PLAN_R.LR_WEEKLY_GAIN+0.5);
     }
-    const slots=planPlaceableSlots(i,isRace);
+    const weekRunDays=planWeekRunDays(i,C,vol,lr,ph,deload);
+    const slots=planPlaceableSlots(i,isRace,weekRunDays);
     const q=isTaper?planTaperQuality(vol,C,i.paces,i.paceLabels,planTOrNull(w,structW),taperW)
                    :planQuality(ph,deload,i.paces,i.paceLabels,vol,rpKm,C,slots);
-    const s=planSchedule(i,C,q,lr,vol,deload,isRace,rpKm,i.paceLabels);
+    const s=planSchedule(i,C,q,lr,vol,deload,isRace,rpKm,i.paceLabels,weekRunDays);
     const qKm=PLAN_DAYS.reduce((a,d)=>a+(s[d].run?(s[d].run.qKm||0):0),0);
-    weeks.push({w,label,vol,lr,rpKm,ph,s,qKm,easyShare:1-qKm/vol,
+    weeks.push({w,label,vol,lr,rpKm,ph,s,qKm,easyShare:1-qKm/vol,runDays:weekRunDays,
       hard:PLAN_DAYS.filter(d=>s[d].run&&s[d].run.hard).length});
   }
   return{peak,binding,buildW,baseW,taperW,ceil,weeks,C};
@@ -1519,11 +1623,23 @@ function auditPlanStructure(p, input){
   const issues = [];
   const C = p.C;
 
-  const build = p.weeks.filter(w => w.label.startsWith('Build') && !w.label.includes('deload'));
-  for(let k=1; k<build.length; k++){
-    if(build[k].lr < build[k-1].lr) issues.push(`Long run dropped between build weeks ${build[k-1].w} and ${build[k].w} (${build[k-1].lr}km \u2192 ${build[k].lr}km)`);
-    if(build[k].lr - build[k-1].lr > 3.01) issues.push(`Long run jumped more than 3km in one week (week ${build[k].w}: ${build[k-1].lr}km \u2192 ${build[k].lr}km)`);
-  }
+  const structural = p.weeks.filter(w => w.label.startsWith('Base') || w.label.startsWith('Build'));
+  let jumpMax = input.recentLongestKm || 0;     // seeded by real demonstrated history - protects week 1 from an unsafe spike
+  let regressMax = null;                         // seeded only once the plan itself has run - an intentionally conservative
+                                                   // start (e.g. the generic-start ramp-in) is not a "regression"
+  structural.forEach(w => {
+    const isDeloadWk = w.label.includes('deload');
+    if(w.lr > jumpMax + PLAN_R.LR_WEEKLY_GAIN + 0.51){
+      issues.push(`Long run jumped from a max of ${jumpMax}km to ${w.lr}km in week ${w.w} - more than the ${PLAN_R.LR_WEEKLY_GAIN}km/week safety cap above anything reached so far`);
+    }
+    if(!isDeloadWk){
+      if(regressMax!==null && w.lr < regressMax){
+        issues.push(`Long run regressed in week ${w.w} (${w.lr}km) below the highest non-deload long run already reached (${regressMax}km)`);
+      }
+      regressMax = regressMax===null ? w.lr : Math.max(regressMax, w.lr);
+    }
+    jumpMax = Math.max(jumpMax, w.lr);
+  });
 
   p.weeks.forEach(w => {
     if(w.easyShare < C.easyMin - 0.005) issues.push(`Week ${w.w} (${w.label}) dropped below the minimum easy-running share (${Math.round(w.easyShare*100)}% vs ${Math.round(C.easyMin*100)}% minimum)`);
@@ -1541,7 +1657,9 @@ function auditPlanStructure(p, input){
 
   p.weeks.forEach(w => {
     const rd = PLAN_DAYS.filter(d => w.s[d].run).length;
-    if(rd !== input.runDays) issues.push(`Week ${w.w} has ${rd} running days instead of the expected ${input.runDays}`);
+    const expected = w.runDays || input.runDays;
+    if(rd !== expected) issues.push(`Week ${w.w} has ${rd} running days instead of the expected ${expected}`);
+    if(expected > input.runDays) issues.push(`Week ${w.w} was scheduled ${expected} running days, more than the ${input.runDays} the user said they have available`);
   });
 
   p.weeks.forEach(w => {
@@ -1703,8 +1821,10 @@ function generateFullPlan(goalType, raceDateStr, profile){
   // Strength placement only engages if a program has actually been set up - "I'm lifting"
   // alone doesn't say which split/days, so there's nothing safe to schedule around yet.
   const strengthSessions = strengthProfileGlobal ? getStrengthSessions() : null;
-  const legKeyMap = { upperLowerCore:['Lower'], upperLower:['Lower'], pushPullLegs:['Legs'], fullBody:['Full Body'] };
-  const strengthLegSessionKeys = strengthProfileGlobal ? (legKeyMap[strengthProfileGlobal.split] || []) : null;
+  const legKeyMap = { upperLowerCore:['Lower'], upperLower:['Lower'], pushPullLegs:['Legs'], fullBody:['Full Body A','Full Body B','Full Body C'] };
+  const strengthLegSessionKeys = strengthProfileGlobal
+    ? [...(legKeyMap[strengthProfileGlobal.split] || []), ...(strengthProfileGlobal.runnerPrehab ? ['Runner Prehab'] : [])]
+    : null;
 
   const ctx = { goalTimeSec, recentWeeklyKm, recentLongestKm, strengthSessions, strengthLegSessionKeys };
 
@@ -3303,6 +3423,59 @@ const STRENGTH_MUSCLE_LIBRARY = {
   },
 };
 
+// Runner-specific injury-prevention exercises, organized by the tissue each one targets.
+// Evidence tiers (see project notes): calf/Achilles eccentric work has the strongest, most
+// established evidence (the Alfredson protocol - decades of RCT support). Nordic curls have
+// strong evidence for hamstring-strain prevention in sprinting/football; direct running RCTs
+// are thinner but the mechanism (eccentric hamstring strength) transfers. Hip/glute work is
+// backed by a clinical review (AFP) specifically for IT band syndrome and patellofemoral pain,
+// the two most common running knee complaints. Dosed for ongoing prevention alongside a
+// training block - lower volume than the twice-daily rehab protocols used for an ACTIVE injury.
+const RUNNER_PREHAB_LIBRARY = {
+  fullGym: {
+    calf: [
+      { name:'Eccentric Calf Raise (straight leg)', avoid:['ankle'], weighted:false, sets:3, reps:'12-15',
+        note:'Rise on both feet, then lower slowly (3-4s) on one leg. Targets gastrocnemius.' },
+      { name:'Eccentric Calf Raise (bent knee)', avoid:['ankle'], weighted:false, sets:3, reps:'12-15',
+        note:'Same idea with the knee bent ~20-30\u00b0, to target soleus instead.' },
+    ],
+    hamstring: [
+      { name:'Nordic Hamstring Curl', avoid:['knee'], weighted:false, sets:3, reps:'6-8',
+        note:'Kneel with feet anchored, lower under control, use hands to help push back up as needed. Start low and build up - this is a demanding exercise.' },
+    ],
+    hipGlute: [
+      { name:'Hip Abduction Machine', avoid:['hip'], sets:3, reps:'15' },
+      { name:'Single-Leg Glute Bridge', avoid:['lowerback'], weighted:false, sets:3, reps:'12 each side' },
+      { name:'Lateral Band Walks', avoid:['knee','hip'], weighted:false, sets:2, reps:'15 each way' },
+    ],
+    core: [
+      { name:'Pallof Press', avoid:[], sets:2, reps:'10 each side' },
+      { name:'Single-Leg RDL Reach', avoid:['lowerback','ankle'], weighted:false, sets:2, reps:'8 each side' },
+    ],
+  },
+  limited: {
+    calf: [
+      { name:'Eccentric Calf Raise (straight leg)', avoid:['ankle'], weighted:false, sets:3, reps:'12-15',
+        note:'Use a step or stair edge for range of motion. Rise on both feet, lower slowly (3-4s) on one.' },
+      { name:'Eccentric Calf Raise (bent knee)', avoid:['ankle'], weighted:false, sets:3, reps:'12-15' },
+    ],
+    hamstring: [
+      { name:'Single-Leg Romanian Deadlift (slow eccentric)', avoid:['lowerback','ankle'], weighted:false, sets:3, reps:'8 each side',
+        note:'Regression for Nordic curl when there\u2019s nothing to anchor your feet under - emphasise a slow 3-4s lowering phase.' },
+    ],
+    hipGlute: [
+      { name:'Clamshells', avoid:['hip'], weighted:false, sets:3, reps:'15-20 each side' },
+      { name:'Single-Leg Glute Bridge', avoid:['lowerback'], weighted:false, sets:3, reps:'12 each side' },
+      { name:'Lateral Band Walks', avoid:['knee','hip'], weighted:false, sets:2, reps:'15 each way' },
+    ],
+    core: [
+      { name:'Pallof Press', avoid:[], sets:2, reps:'10 each side' },
+      { name:'Bird Dog', avoid:[], weighted:false, sets:2, reps:'10 each side' },
+    ],
+  },
+};
+function prehabToExercise(ex){ return { name:ex.name, sets:ex.sets, reps:ex.reps, weighted:ex.weighted!==false, note:ex.note||null }; }
+
 const SPLIT_TEMPLATES = {
   upperLowerCore: {
     label: 'Upper / Lower / Core',
@@ -3322,7 +3495,7 @@ const SPLIT_TEMPLATES = {
   fullBody: {
     label: 'Full Body',
     blurb: 'One well-rounded session (squat/hinge, push, pull, core) repeated across the week. Research generally favours training each muscle group about twice a week for strength/hypertrophy, and full body gets you there naturally even at just 2\u20133 sessions \u2014 often recommended for beginners or anyone training fewer than 3 days.',
-    sessions: [ { key:'Full Body', label:'Session 1' }, { key:'Full Body', label:'Session 2' }, { key:'Full Body', label:'Session 3' } ],
+    sessions: [ { key:'Full Body A', label:'Session 1' }, { key:'Full Body B', label:'Session 2' }, { key:'Full Body C', label:'Session 3' } ],
   },
 };
 
@@ -3365,6 +3538,21 @@ function buildStrengthRole(exList, roleKey, count, scheme, injuryFlags){
   return picked.map(ex => ({ name: ex.name, sets, reps, weighted: ex.weighted !== false }));
 }
 
+// One calf/Achilles exercise + one hip/glute exercise, guaranteed (not left to random chance)
+// on any leg-focused session, regardless of split. These are the two highest-evidence, lowest
+// time-cost prehab additions (see RUNNER_PREHAB_LIBRARY notes above) - baseline coverage for
+// everyone, whether or not they opt into the fuller Runner Prehab session.
+function baselinePrehabExtras(equipment, injuryFlags, alreadyPicked){
+  const lib = RUNNER_PREHAB_LIBRARY[equipment] || RUNNER_PREHAB_LIBRARY.fullGym;
+  const existingNames = new Set((alreadyPicked||[]).map(e=>e.name));
+  const calfPool = lib.calf.filter(e=>!existingNames.has(e.name));
+  const hipGlutePool = lib.hipGlute.filter(e=>!existingNames.has(e.name));
+  return [
+    ...pickExercisesAvoiding(calfPool, 1, injuryFlags),
+    ...pickExercisesAvoiding(hipGlutePool, 1, injuryFlags),
+  ].map(prehabToExercise);
+}
+
 function buildStrengthSession(categoryKey, equipment, scheme, counts, experienceLevel, injuryFlags){
   const lib = STRENGTH_MUSCLE_LIBRARY;
   if(categoryKey === 'Upper'){
@@ -3374,8 +3562,9 @@ function buildStrengthSession(categoryKey, equipment, scheme, counts, experience
             ...buildStrengthRole(isolationLib, 'isolation', counts.isolation, scheme, injuryFlags)];
   }
   if(categoryKey === 'Lower'){
-    return [...buildStrengthRole(lib.Legs[equipment].compound, 'compound', counts.compound, scheme, injuryFlags),
-            ...buildStrengthRole(lib.Legs[equipment].accessory, 'accessory', counts.accessory, scheme, injuryFlags)];
+    const picked = [...buildStrengthRole(lib.Legs[equipment].compound, 'compound', counts.compound, scheme, injuryFlags),
+                    ...buildStrengthRole(lib.Legs[equipment].accessory, 'accessory', counts.accessory, scheme, injuryFlags)];
+    return [...picked, ...baselinePrehabExtras(equipment, injuryFlags, picked)];
   }
   if(categoryKey === 'Core'){
     return buildStrengthRole(lib.Core[equipment].main, 'main', counts.main, scheme, injuryFlags);
@@ -3385,10 +3574,11 @@ function buildStrengthSession(categoryKey, equipment, scheme, counts, experience
             ...buildStrengthRole(lib[categoryKey][equipment].isolation, 'isolation', counts.isolation, scheme, injuryFlags)];
   }
   if(categoryKey === 'Legs'){
-    return [...buildStrengthRole(lib.Legs[equipment].compound, 'compound', counts.compound, scheme, injuryFlags),
-            ...buildStrengthRole(lib.Legs[equipment].accessory, 'accessory', counts.accessory, scheme, injuryFlags)];
+    const picked = [...buildStrengthRole(lib.Legs[equipment].compound, 'compound', counts.compound, scheme, injuryFlags),
+                    ...buildStrengthRole(lib.Legs[equipment].accessory, 'accessory', counts.accessory, scheme, injuryFlags)];
+    return [...picked, ...baselinePrehabExtras(equipment, injuryFlags, picked)];
   }
-  if(categoryKey === 'Full Body'){
+  if(categoryKey.startsWith('Full Body')){
     const base = [
       ...buildStrengthRole(lib.Legs[equipment].compound, 'compound', 1, scheme, injuryFlags),
       ...buildStrengthRole(lib.Push[equipment].compound, 'compound', 1, scheme, injuryFlags),
@@ -3398,7 +3588,18 @@ function buildStrengthSession(categoryKey, equipment, scheme, counts, experience
     const extra = FULL_BODY_EXTRA_BY_EXPERIENCE[experienceLevel] ?? 0;
     if(extra >= 1) base.push(...buildStrengthRole(lib.Legs[equipment].accessory, 'accessory', 1, scheme, injuryFlags));
     if(extra >= 2) base.push(...buildStrengthRole(lib.Push[equipment].isolation, 'isolation', 1, scheme, injuryFlags));
-    return base;
+    return [...base, ...baselinePrehabExtras(equipment, injuryFlags, base)];
+  }
+  if(categoryKey === 'Runner Prehab'){
+    // The comprehensive, opt-in version: covers all four target areas in one dedicated
+    // session, rather than the 2-exercise baseline threaded into a regular leg day.
+    const rlib = RUNNER_PREHAB_LIBRARY[equipment] || RUNNER_PREHAB_LIBRARY.fullGym;
+    return [
+      ...pickExercisesAvoiding(rlib.calf, 2, injuryFlags),
+      ...pickExercisesAvoiding(rlib.hamstring, 1, injuryFlags),
+      ...pickExercisesAvoiding(rlib.hipGlute, 2, injuryFlags),
+      ...pickExercisesAvoiding(rlib.core, 1, injuryFlags),
+    ].map(prehabToExercise);
   }
   return [];
 }
@@ -3412,6 +3613,7 @@ function generateStrengthProgram(profile){
 
   const result = {};
   const uniqueCategoryKeys = [...new Set(template.sessions.map(s=>s.key))];
+  if(profile.runnerPrehab) uniqueCategoryKeys.push('Runner Prehab');
   uniqueCategoryKeys.forEach(key=>{
     result[key] = buildStrengthSession(key, equipment, scheme, counts, profile.experienceLevel, injuryFlags);
   });
@@ -3478,8 +3680,11 @@ function getEffectiveStrengthScheduleForWeek(weekMonday){
 }
 async function loadStrengthSchedule(){ try{ const r = await storageGetSafe('strength_schedule'); return r?JSON.parse(r.value):null; }catch(e){ return null; } }
 async function saveStrengthSchedule(sched){ await storageSetSafe('strength_schedule', JSON.stringify(sched)); }
-const SESSION_LOG_COLORS = { Upper:'#E07A4A', Lower:'#C9633F', Core:'#6EA88C', Push:'#C9633F', Pull:'#6E8AA8', Legs:'#E07A4A', 'Full Body':'#6EA88C' };
+const SESSION_LOG_COLORS = { Upper:'#E07A4A', Lower:'#C9633F', Core:'#6EA88C', Push:'#C9633F', Pull:'#6E8AA8', Legs:'#E07A4A', 'Full Body A':'#6EA88C', 'Full Body B':'#6E8AA8', 'Full Body C':'#C9633F', 'Runner Prehab':'#8FA876' };
 const SESSION_LOG_FALLBACK_COLOR = '#8899AA';
+// Last word's first letter, not the whole string's first letter - so 'Full Body A' / 'Full
+// Body B' / 'Full Body C' show as distinct A/B/C markers instead of all showing 'F'.
+function sessionInitial(name){ const words = String(name).trim().split(/\s+/); return words[words.length-1][0].toUpperCase(); }
 
 let strengthSessionCompletion = {};
 async function loadStrengthSessionCompletion(){ try{ const r = await storageGetSafe('strength_session_completion'); return r?JSON.parse(r.value):{}; }catch(e){ return {}; } }
@@ -3546,6 +3751,13 @@ function initStrengthSessionLogger(){
   function renderStrengthDaysLog(){
     const container = document.getElementById('strengthDaysLog');
     if(!container) return;
+    const legendEl = document.getElementById('strengthDaysLegend');
+    if(legendEl){
+      legendEl.innerHTML = sessionNames.map(s=>{
+        const color = SESSION_LOG_COLORS[s] || SESSION_LOG_FALLBACK_COLOR;
+        return `<span><i style="background:${color}"></i>${s} (${sessionInitial(s)})</span>`;
+      }).join('');
+    }
     const today = new Date();
     const days = [];
     for(let i=13;i>=0;i--){ const dt=new Date(today); dt.setDate(today.getDate()-i); days.push(dt); }
@@ -3558,7 +3770,7 @@ function initStrengthSessionLogger(){
       if(trained.length){
         bg = SESSION_LOG_COLORS[trained[0]] || SESSION_LOG_FALLBACK_COLOR;
         color = '#0D0F12';
-        display = trained.map(s=>s[0]).join('/');
+        display = trained.map(s=>sessionInitial(s)).join('/');
       }
       return `<div class="habit-day-col">
         <div class="habit-day-label">${label}</div>
@@ -3596,6 +3808,7 @@ function initStrengthSessionLogger(){
         </div>` : '';
       return `<div class="ex-row">
         <div class="ex-row-top"><span class="ex-name">${ex.name}</span><span class="ex-target">${ex.sets}&times;${ex.reps}</span></div>
+        ${ex.note ? `<p class="note" style="margin:4px 0 8px;">${ex.note}</p>` : ''}
         ${weightBlock}
       </div>`;
     }).join('')}</div>
@@ -3617,6 +3830,7 @@ function initStrengthSessionLogger(){
         renderStrengthDaysLog();
         renderStrengthWeekSummary();
         refreshLiftHistorySelect();
+        if(window._replan) window._replan();
       });
     });
     container.querySelectorAll('.feel-btn').forEach(btn=>{
@@ -3631,6 +3845,7 @@ function initStrengthSessionLogger(){
         renderStrengthDaysLog();
         renderStrengthWeekSummary();
         refreshLiftHistorySelect();
+        if(window._replan) window._replan();
       });
     });
     document.getElementById('finishSessionBtn').addEventListener('click', async ()=>{
@@ -3768,8 +3983,11 @@ function defaultDayForIndex(i){
   return pool[i % pool.length];
 }
 
-function renderStrengthDayPickers(splitKey, prefillSchedule){
+function renderStrengthDayPickers(splitKey, prefillSchedule, includePrehab){
   const template = SPLIT_TEMPLATES[splitKey] || SPLIT_TEMPLATES.upperLowerCore;
+  const sessions = includePrehab
+    ? [...template.sessions, { key:'Runner Prehab', label:'Runner Prehab' }]
+    : template.sessions;
   const container = document.getElementById('strengthDayPickers');
   const dayOptions = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
   const dayIndexByName = {Mon:0,Tue:1,Wed:2,Thu:3,Fri:4,Sat:5,Sun:6};
@@ -3781,7 +3999,7 @@ function renderStrengthDayPickers(splitKey, prefillSchedule){
     existingByCategory[cat].push(day);
   });
 
-  container.innerHTML = template.sessions.map((session, i)=>{
+  container.innerHTML = sessions.map((session, i)=>{
     const pool = existingByCategory[session.key] || [];
     const prefill = pool.length ? pool.shift() : defaultDayForIndex(i);
     return `<div class="field">
@@ -3827,13 +4045,17 @@ async function initExerciseEditor(){
 
   const splitSelect = document.getElementById('strengthSplit');
   const splitBlurb = document.getElementById('strengthSplitBlurb');
+  const prehabCheckbox = document.getElementById('strengthRunnerPrehab');
   function updateSplitBlurb(){
     const t = SPLIT_TEMPLATES[splitSelect.value] || SPLIT_TEMPLATES.upperLowerCore;
     splitBlurb.textContent = t.blurb;
   }
   splitSelect.addEventListener('change', ()=>{
     updateSplitBlurb();
-    renderStrengthDayPickers(splitSelect.value, strengthScheduleGlobal);
+    renderStrengthDayPickers(splitSelect.value, strengthScheduleGlobal, prehabCheckbox.checked);
+  });
+  prehabCheckbox.addEventListener('change', ()=>{
+    renderStrengthDayPickers(splitSelect.value, strengthScheduleGlobal, prehabCheckbox.checked);
   });
 
   const setupToggle = document.getElementById('strengthSetupBtn');
@@ -3845,8 +4067,9 @@ async function initExerciseEditor(){
     setupToggle.textContent = showing ? strengthSetupDefaultLabel : 'Cancel';
     if(!showing){
       splitSelect.value = (strengthProfileGlobal && SPLIT_TEMPLATES[strengthProfileGlobal.split]) ? strengthProfileGlobal.split : 'upperLowerCore';
+      prehabCheckbox.checked = !!(strengthProfileGlobal && strengthProfileGlobal.runnerPrehab);
       updateSplitBlurb();
-      renderStrengthDayPickers(splitSelect.value, strengthScheduleGlobal);
+      renderStrengthDayPickers(splitSelect.value, strengthScheduleGlobal, prehabCheckbox.checked);
     }
   });
   document.getElementById('confirmStrengthSetupBtn').addEventListener('click', async ()=>{
@@ -3855,6 +4078,7 @@ async function initExerciseEditor(){
     const experienceLevel = document.getElementById('strengthExperience').value;
     const equipment = document.getElementById('strengthEquipment').value;
     const injuryFlags = Array.from(document.querySelectorAll('#strengthInjuries input:checked')).map(el=>el.value);
+    const runnerPrehab = prehabCheckbox.checked;
 
     const dayPickers = Array.from(document.querySelectorAll('#strengthDayPickers .strength-day-picker'));
     const chosenDays = dayPickers.map(sel=>sel.value);
@@ -3879,7 +4103,7 @@ async function initExerciseEditor(){
 
     if(!confirm('This replaces your current exercise list with a generated program based on your answers, and updates your suggested training days. Weight history for each exercise stays saved under its name either way \u2014 if an exercise isn\u2019t in the new program, its history just won\u2019t show, it isn\u2019t deleted. Continue?')) return;
 
-    const profile = { split: splitKey, goal, experienceLevel, equipment, injuryFlags };
+    const profile = { split: splitKey, goal, experienceLevel, equipment, injuryFlags, runnerPrehab };
     const newExercises = generateStrengthProgram(profile);
 
     await saveCustomExercises(newExercises);
@@ -4015,9 +4239,11 @@ async function initPlan(){
   document.getElementById('resetMarathonPlanBtn').addEventListener('click', resetMarathonPlan);
 
   const [customExercises, savedSchedule] = await Promise.all([loadCustomExercises(), loadStrengthSchedule()]);
-  Object.keys(customExercises).forEach(cat=>{
-    if(activeExercises[cat] && Array.isArray(customExercises[cat])) activeExercises[cat] = customExercises[cat];
-  });
+  // If a program has ever been generated/saved, it should fully define the session set -
+  // not be filtered down to whichever categories happen to match the untouched default.
+  if(customExercises && Object.keys(customExercises).length && Object.values(customExercises).every(v=>Array.isArray(v))){
+    activeExercises = customExercises;
+  }
   recomputeExercise1RMReps();
   if(savedSchedule) strengthScheduleGlobal = savedSchedule;
   await initExerciseEditor();
@@ -4163,15 +4389,25 @@ async function initPlan(){
   function sessionCardHtml(wi, dayKey, session, weekMonday, dayIndex){
     const dayNames = {Mon:'Mon',Tue:'Tue',Wed:'Wed',Thu:'Thu',Fri:'Fri',Sat:'Sat',Sun:'Sun'};
     const dkey = addDays(weekMonday, dayIndex);
-    const liftLine = (s) => s && s.lift
-      ? `<p class="session-detail-text" style="margin-top:6px;color:var(--accent);">+ ${s.lift}${s.liftWarning ? ` &mdash; \u26a0 ${s.liftWarning}` : ''}</p>`
-      : '';
+    const liftLine = (s) => {
+      if(!s || !s.lift) return '';
+      const liftDone = isStrengthDone(dkey, s.lift);
+      return `<label class="session-detail-text lift-done-label" style="margin-top:6px;color:var(--accent);display:flex;align-items:center;gap:6px;cursor:pointer;">
+        <input type="checkbox" class="lift-done-check" data-date="${dkey}" data-session="${s.lift.replace(/"/g,'&quot;')}" ${liftDone?'checked':''}>
+        <span>+ ${s.lift}${liftDone?' \u2713':''}${s.liftWarning ? ` &mdash; \u26a0 ${s.liftWarning}` : ''}</span>
+      </label>`;
+    };
     if(!session || !session.type){
       // Rest day, but may still carry a lift session (the new generator can place
       // strength on an otherwise non-running day).
+      const liftDone = session && session.lift && isStrengthDone(dkey, session.lift);
       return `<div class="session-card type-rest">
         <div class="session-day-name">${dayNames[dayKey]}</div>
         <div class="session-type-label">${session && session.lift ? session.lift : 'Rest'}</div>
+        ${session && session.lift ? `<label class="session-detail-text lift-done-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+          <input type="checkbox" class="lift-done-check" data-date="${dkey}" data-session="${session.lift.replace(/"/g,'&quot;')}" ${liftDone?'checked':''}>
+          <span>${liftDone?'\u2713 Done':'Mark done'}</span>
+        </label>` : ''}
         ${session && session.lift && session.liftWarning ? `<p class="session-detail-text" style="color:var(--accent);">\u26a0 ${session.liftWarning}</p>` : ''}
       </div>`;
     }
@@ -4235,6 +4471,14 @@ async function initPlan(){
         card.classList.toggle('session-done', e.target.checked);
         e.target.nextElementSibling.textContent = e.target.checked ? 'Done' : 'Mark done';
         renderWeekPlanTile();
+      });
+    });
+
+    tbody.querySelectorAll('.lift-done-check').forEach(cb=>{
+      cb.addEventListener('click', e=>e.stopPropagation());
+      cb.addEventListener('change', async (e)=>{
+        await toggleStrengthDone(e.target.dataset.date, e.target.dataset.session, e.target.checked);
+        if(window._replan) window._replan();
       });
     });
 
