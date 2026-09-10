@@ -1313,22 +1313,35 @@ function planDeloadDepth(bw,buildW){
   return PLAN_R.DELOAD_DEPTH_EARLY+(PLAN_R.DELOAD_DEPTH_LATE-PLAN_R.DELOAD_DEPTH_EARLY)*f;
 }
 function derivePeak(i,C){
-  const expBase={new:1.25,consistent:1.40,experienced:1.55}[i.experience];
-  // Runway bonus: longer time-to-race lets a beginner (or anyone starting from a modest
-  // base) build to real volume. The old 0.55 cap topped out at week 22 - a 30 or 40 week
-  // runway got no extra room past that, which is what kept true beginners stuck at a low
-  // ceiling regardless of how much time they had. Raised the cap and let it keep growing
-  // to ~week 34. This is safe because it's still a ONE-TIME, gradual target set before the
-  // block starts - the actual week-to-week climb toward it is still governed by the
-  // separate 2.5km/week long-run cap and the build-phase ramp, so a bigger destination
-  // doesn't mean a faster climb, just a longer one. Consistent with the design doc's own
-  // finding: injury risk tracks the RATE of volume change, not the level, so a longer
-  // runway earning a higher (but still gradually-reached) peak is the intended use of time.
-  const lenBonus=Math.max(0,Math.min(1.10,(i.weeks-10)*0.045));
-  const a=i.recentWeeklyKm*(expBase+lenBonus);
+  // Peak used to be `recentWeeklyKm x a capped multiplier`. That produced two opposite
+  // failures: for a true beginner (e.g. 8km/wk) it stayed tiny almost regardless of runway,
+  // since it's proportional to a small base. A first attempt fixed that with pure compounding
+  // growth (the same rate-based reasoning used to shape the ramp itself) - but that broke the
+  // OTHER direction: compounding is scale-invariant, so the same "safe" weekly rate let an
+  // already-established runner (e.g. 35km/wk, 'new' to STRUCTURED training) nearly double to
+  // 70-80km/wk in just 16-24 weeks, which isn't reasonable even though each week's step was
+  // nominally rate-safe. Fixed with a hybrid: a sensible TARGET peak grounded in what's
+  // actually appropriate for marathon training at that experience level (scaling up modestly
+  // if current volume already exceeds it), with the compounding rate math only used to REDUCE
+  // that target when the timeline is genuinely too short to reach it safely - not to grow the
+  // target indefinitely just because there's a lot of time.
+  const taperW = planTaperLength(i,C);
+  const structW = Math.max(1, i.weeks - taperW);
+  const weeklyGrowthRate={new:0.06,consistent:0.08,experienced:0.10}[i.experience];
+  // Sensible target peaks by distance and experience - grounded in the benchmark plans this
+  // generator is validated against (Higdon, Pfitzinger). A true beginner with a normal-length
+  // runway should be able to reach this; current volume only pushes the target UP (modestly)
+  // if someone's already past it, never down. Reasoned defaults, not precise evidence.
+  const TARGET_PEAK={marathon:{new:38,consistent:55,experienced:70},
+    half:{new:30,consistent:42,experienced:55},
+    '10k':{new:35,consistent:45,experienced:55},
+    '5k':{new:30,consistent:40,experienced:50}}[i.distance][i.experience];
+  const modestMultiplier={new:1.4,consistent:1.5,experienced:1.6}[i.experience];
+  const target=Math.max(TARGET_PEAK,i.recentWeeklyKm*modestMultiplier);
+  const rateReachable=i.recentWeeklyKm*Math.pow(1+weeklyGrowthRate,structW-1);
+  const a=Math.min(90,target,rateReachable);
   const b=i.runDays*C.maxPerRun[i.runDays];
-  const c=i.recentWeeklyKm*(1+0.05*i.weeks);
-  const raw=Math.min(a,b,c), bind=['history','days','time'][[a,b,c].indexOf(raw)];
+  const raw=Math.min(a,b), bind = a<=b?'history':'days';
   let p=raw; if(i.injuryFlag)p*=0.85; if(i.lifting)p*=0.93;
   p=Math.max(p,i.recentWeeklyKm*(i.injuryFlag?0.9:1.0));
   if(C.volumeMode==='flat') p=Math.min(p,i.recentWeeklyKm*1.35);
@@ -1830,7 +1843,16 @@ function generateFullPlan(goalType, raceDateStr, profile){
   const goalTimeSec = parseHMS(goalTimeStr);
 
   const recentKms = weeklyData.weekly.slice(-6).map(w=>w.km).filter(k=>k>0);
-  const recentWeeklyKm = recentKms.length ? recentKms.reduce((a,b)=>a+b,0)/recentKms.length : 0;
+  const sixWeekAvg = recentKms.length ? recentKms.reduce((a,b)=>a+b,0)/recentKms.length : 0;
+  // A flat 6-week average smooths out a single anomalous week, which is good - but it also
+  // hides a genuine upward TREND: someone who's clearly ramping up (several lower weeks then
+  // a real recent jump) looks artificially stuck at their older, lower volume. Blending with
+  // a shorter recent window lets a real trend show through without discarding the smoothing
+  // entirely - this is never LOWER than the conservative 6-week estimate, only ever higher,
+  // so it only helps someone who's trending up; it doesn't make a declining trend look worse.
+  const lastTwoKms = recentKms.slice(-2);
+  const recentTwoWeekAvg = lastTwoKms.length ? lastTwoKms.reduce((a,b)=>a+b,0)/lastTwoKms.length : 0;
+  const recentWeeklyKm = Math.max(sixWeekAvg, recentTwoWeekAvg);
   // Longest recent run: taken from the same 6-week window as volume above, using each week's
   // longest single run - NOT the old "longest of the 10 most recent runs" approach, which
   // could hide a genuinely longer effort from a few weeks back behind several shorter, more
@@ -4644,13 +4666,35 @@ async function initPlan(){
         <div class="t">${block.goalType} \u2014 ${block.raceDate}</div>
         <div class="d">Goal ${block.goalTime} \u00b7 archived ${block.archivedAt.slice(0,10)} \u00b7 ${weeksLogged}/${block.plan.length} weeks had sessions logged</div>
       </div>
-      <button class="restore-archived-btn" data-archived-at="${block.archivedAt}" style="background:rgba(122,184,169,0.15);border:1px solid rgba(122,184,169,0.5);color:var(--track);border-radius:10px;padding:7px 14px;font-size:11px;font-family:'Inter',sans-serif;cursor:pointer;white-space:nowrap;">Restore</button></div>`;
+      <div style="display:flex;gap:8px;">
+      <button class="restore-archived-btn" data-archived-at="${block.archivedAt}" style="background:rgba(122,184,169,0.15);border:1px solid rgba(122,184,169,0.5);color:var(--track);border-radius:10px;padding:7px 14px;font-size:11px;font-family:'Inter',sans-serif;cursor:pointer;white-space:nowrap;">Restore</button>
+      <button class="delete-archived-btn" data-archived-at="${block.archivedAt}" style="background:rgba(201,99,63,0.12);border:1px solid rgba(201,99,63,0.4);color:var(--clay);border-radius:10px;padding:7px 14px;font-size:11px;font-family:'Inter',sans-serif;cursor:pointer;white-space:nowrap;">Delete</button>
+      </div></div>`;
     }).join('');
     document.querySelectorAll('.restore-archived-btn').forEach(btn=>{
       btn.addEventListener('click', () => restoreArchivedBlock(btn.dataset.archivedAt));
     });
+    document.querySelectorAll('.delete-archived-btn').forEach(btn=>{
+      btn.addEventListener('click', () => deleteArchivedBlock(btn.dataset.archivedAt));
+    });
   }
   renderArchivedBlocks();
+
+  // Permanently removes an archived block. Matched by archivedAt (a unique timestamp), not
+  // array index - same reasoning as restore below: the display list is reversed for
+  // newest-first, so indexing directly against the underlying stored array risks an
+  // off-by-one mistake. This does NOT touch the active plan - only entries already sitting
+  // in the archive can be deleted here.
+  async function deleteArchivedBlock(archivedAt){
+    const archive = await loadPlanArchive();
+    const idx = archive.findIndex(b => b.archivedAt === archivedAt);
+    if(idx === -1){ alert('Could not find that archived block \u2014 try reloading the page.'); return; }
+    const block = archive[idx];
+    if(!confirm(`Permanently delete the archived ${block.goalType} block for ${block.raceDate}? This can\u2019t be undone \u2014 unlike Restore, there\u2019s no way to get it back afterward.`)) return;
+    archive.splice(idx, 1);
+    await savePlanArchive(archive);
+    await renderArchivedBlocks();
+  }
 
   // Restores an archived block back to being the active plan. Matched by archivedAt (a
   // unique timestamp), not array index - the display list is reversed for newest-first, and
