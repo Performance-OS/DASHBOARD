@@ -1368,6 +1368,20 @@ function lrLine(startLR,buildW,ceil){
   return L;
 }
 const planPhaseOf=(w,b)=>{const f=w/b;return f<0.35?'early':f<0.70?'mid':'late';};
+// No real published marathon plan structures a week around genuinely low volume the way a
+// fixed long-run percentage would (confirmed: Higdon Novice 1 never starts below 24km/week,
+// and its lowest week uses a LOWER long-run share - 40% - not the ~50% used at peak). A long
+// run consuming half of a 14km week isn't a scaled-down normal week, it's a different
+// situation entirely - the other sessions become too thin to be meaningful. This scales the
+// long-run share down at low volume, rising to the full target once volume is high enough to
+// sensibly support a genuinely long session relative to the rest of the week.
+function lrShareForVolume(vol,targetPct){
+  const LOW=20, NORMAL=35;
+  if(vol<=LOW) return 0.35;
+  if(vol>=NORMAL) return targetPct;
+  const frac=(vol-LOW)/(NORMAL-LOW);
+  return 0.35+(targetPct-0.35)*frac;
+}
 
 function planQuality(ph,deload,paces,paceLabels,vol,rpInLR,C,slots){
   if(ph==='base')return[{t:'Easy + strides',d:'6 x 20s strides',hard:false,qKm:0,label:'Easy + strides',paceLabel:null}];
@@ -1598,7 +1612,18 @@ function planGenerate(i){
   // line needs to continue from THAT point, not restart from the original pre-block number,
   // or the transition from base into build creates a false discontinuity (a dip, followed by
   // what looks like a spike back up) right at the handoff.
-  const rampStartLR=baseW?Math.round(Math.min(i.recentLongestKm+baseW*0.5,ceil*0.8)):i.recentLongestKm;
+  // Cap the long-run ramp's starting point relative to the volume it's actually starting
+  // from. recentLongestKm (a single best-effort long run) and rampStartVol (a trailing
+  // weekly-volume average) are two independent measurements not guaranteed to be
+  // proportionate - confirmed with a real case where a demonstrated 10km long run combined
+  // with only ~14km/week current volume produced a week with a 10km long run and two 2km
+  // "easy" runs. A genuinely completed long run is real evidence and shouldn't be ignored,
+  // so this caps at 55% (above the eventual 50% target) rather than clamping to the target
+  // immediately - checked that even the strict 50% target only allows ~3.5km per easy day
+  // at this volume anyway, so the real constraint is the low overall volume, not the split.
+  const rampStartLR=baseW
+    ?Math.round(Math.min(i.recentLongestKm+baseW*0.5,ceil*0.8,rampStartVol*lrShareForVolume(rampStartVol,C.lrPctGuard)))
+    :Math.min(i.recentLongestKm,Math.round(rampStartVol*lrShareForVolume(rampStartVol,C.lrPctGuard)));
   const volGrowth=peak/Math.max(1e-6,rampStartVol);
   const volRampWeeksNeeded=volGrowth>1?Math.ceil(Math.log(volGrowth)/Math.log(1+PLAN_R.WEEKLY_GROWTH_CAP)):1;
   const lrRampWeeksNeeded=Math.max(1,Math.ceil(Math.max(0,ceil-rampStartLR)/PLAN_R.LR_WEEKLY_GAIN));
@@ -1618,7 +1643,7 @@ function planGenerate(i){
         vol = applyDeloadVolumeFloor(vol, nextOnTrackVol);
       }
       label=deload?'Base (deload)':'Base';
-      lr=Math.round(Math.min(i.recentLongestKm+w*0.5,ceil*0.8));}
+      lr=Math.round(Math.min(i.recentLongestKm+w*0.5,ceil*0.8,vol*lrShareForVolume(vol,C.lrPctGuard)));}
     else if(!isTaper){ph=planPhaseOf(bw,buildW);
       const st=rampStartVol;
       const volAt = (bwv) => C.volumeMode==='flat'
@@ -1876,7 +1901,23 @@ function generateFullPlan(goalType, raceDateStr, profile){
     || '3:45:00';
   const goalTimeSec = parseHMS(goalTimeStr);
 
-  const recentKms = weeklyData.weekly.slice(-6).map(w=>w.km).filter(k=>k>0);
+  // Detect the most recent gap - a run of one or more near-zero (<=2km) weeks - and its
+  // length. A brief interruption (1-2 weeks: injury, travel, illness) after real, sustained
+  // training doesn't erase that training the way a longer layoff would, so a short gap gets
+  // to credit the level immediately before it (discounted, not in full) - a longer gap (3+
+  // weeks) still falls back to treating only what comes after it as representative, since
+  // that DOES warrant a more conservative rebuild.
+  const rawWeeklyKms = weeklyData.weekly.slice(-10).map(w=>w.km);
+  let gapEnd=-1, gapStart=-1;
+  for(let idx=rawWeeklyKms.length-1; idx>=0; idx--){
+    if(rawWeeklyKms[idx]<=2){
+      if(gapEnd===-1) gapEnd=idx;
+      gapStart=idx;
+    } else if(gapEnd!==-1){ break; }
+  }
+  const gapLen = gapEnd>=0 ? (gapEnd-gapStart+1) : 0;
+  const postGapKms = gapEnd>=0 ? rawWeeklyKms.slice(gapEnd+1) : rawWeeklyKms;
+  const recentKms = postGapKms.slice(-6).filter(k=>k>0);
   const sixWeekAvg = recentKms.length ? recentKms.reduce((a,b)=>a+b,0)/recentKms.length : 0;
   // A flat 6-week average smooths out a single anomalous week, which is good - but it also
   // hides a genuine upward TREND: someone who's clearly ramping up (several lower weeks then
@@ -1886,7 +1927,14 @@ function generateFullPlan(goalType, raceDateStr, profile){
   // so it only helps someone who's trending up; it doesn't make a declining trend look worse.
   const lastTwoKms = recentKms.slice(-2);
   const recentTwoWeekAvg = lastTwoKms.length ? lastTwoKms.reduce((a,b)=>a+b,0)/lastTwoKms.length : 0;
-  const recentWeeklyKm = Math.max(sixWeekAvg, recentTwoWeekAvg);
+  let recentWeeklyKm = Math.max(sixWeekAvg, recentTwoWeekAvg);
+  if(gapEnd>=0 && gapLen<=2 && gapStart>0){
+    const preGapKms = rawWeeklyKms.slice(0,gapStart).filter(k=>k>0);
+    if(preGapKms.length){
+      const preGapAvg = preGapKms.slice(-4).reduce((a,b)=>a+b,0)/preGapKms.slice(-4).length;
+      recentWeeklyKm = Math.max(recentWeeklyKm, preGapAvg*0.85);
+    }
+  }
   // Longest recent run: taken from the same 6-week window as volume above, using each week's
   // longest single run - NOT the old "longest of the 10 most recent runs" approach, which
   // could hide a genuinely longer effort from a few weeks back behind several shorter, more
