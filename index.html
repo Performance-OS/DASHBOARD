@@ -1289,7 +1289,14 @@ const PLAN_R = {LR_WEEKLY_GAIN:2.5,BASE_TRIGGER:18,
   // Set a bit above the steady ramp's own rate so deloads keep real depth rather than being
   // squeezed out entirely, while still well under the jumps that were happening. A reasoned
   // default, not a hard evidence-backed number - similar status to the other judgment calls here.
-  MAX_WEEKLY_VOL_JUMP_PCT:0.15,
+  // Calibrated against a hand-crafted reference plan (built and validated with the user
+  // directly): after fixing ITS excessive 40-59% recovery jumps, the smoothed version landed
+  // in the 22-35% range per transition - real deload relief while keeping recovery bounded.
+  // 15% was too tight: side-by-side comparison showed the generator's own deloads barely
+  // dipping at all (+12%, +3% instead of a real cut) whenever the ramp climbed at a similar
+  // rate, because the floor consumed nearly the whole intended dip. 30% still meaningfully
+  // caps the extreme jumps (40-59%+) while leaving deloads room to actually be deloads.
+  MAX_WEEKLY_VOL_JUMP_PCT:0.30,
 };
 
 const GENERIC_START_KM = { marathon:25, half:18, '10k':14, '5k':12 };
@@ -1327,7 +1334,12 @@ function derivePeak(i,C){
   // target indefinitely just because there's a lot of time.
   const taperW = planTaperLength(i,C);
   const structW = Math.max(1, i.weeks - taperW);
-  const weeklyGrowthRate={new:0.06,consistent:0.08,experienced:0.10}[i.experience];
+  // "new" tier grounded directly against Higdon Novice 1 (the most widely-used first-marathon
+  // plan, used successfully by over a million runners): its published week-by-week mileage
+  // implies an actual average compounding rate of ~7.3%/week from week 1 to peak - notably
+  // faster than the 6% originally used here. Updated to 7%, still a touch more conservative
+  // than Higdon's own real numbers rather than matching them exactly.
+  const weeklyGrowthRate={new:0.07,consistent:0.08,experienced:0.10}[i.experience];
   // Sensible target peaks by distance and experience - grounded in the benchmark plans this
   // generator is validated against (Higdon, Pfitzinger). A true beginner with a normal-length
   // runway should be able to reach this; current volume only pushes the target UP (modestly)
@@ -1521,8 +1533,8 @@ function planSchedule(i,C,q,lr,vol,deload,isRace,rpKm,paceLabels,runDaysThisWeek
 
 function planTaperLength(i,C){
   const byDistance={marathon:3,half:2,'10k':2,'5k':2}[i.distance];
+  if(i.distance==='marathon') return i.weeks>=16 ? 3 : 2;
   if(i.weeks<=8) return Math.min(byDistance,2);
-  if(i.weeks>=16&&i.distance==='marathon') return 3;
   return byDistance;
 }
 function planTaperVolumeFactor(t,taperW){ return Math.pow(0.40,t/taperW); }
@@ -1535,6 +1547,14 @@ function planTaperQuality(vol,C,paces,paceLabels,t,taperW){
   const reps=Math.max(2,Math.round(km));
   return [{t:'Race-pace touch',d:`${reps} x 1km @ Goal pace (${paceLabels.RP}/km), 90s jog`,
            hard:true,qKm:Math.floor(km*10)/10,label:'Race-pace touch',paceLabel:paceLabels.RP+'/km'}];
+}
+
+// Shared deload-volume-floor logic, previously written twice (once for the base phase, once
+// for the build phase) with identical math - extracted so a future fix only needs to happen
+// in one place. Caps how deep a deload dip can go, so the recovery step up to next week's
+// on-track value can't itself be an unsafe jump.
+function applyDeloadVolumeFloor(dippedVol, nextOnTrackVol){
+  return Math.max(dippedVol, nextOnTrackVol/(1+PLAN_R.MAX_WEEKLY_VOL_JUMP_PCT));
 }
 
 function planGenerate(i){
@@ -1553,11 +1573,26 @@ function planGenerate(i){
   // handoff into build (a real regression, caught by testing). The base target is never
   // allowed below their current volume.
   const baseTargetVol=Math.max(peak*0.55,i.recentWeeklyKm);
+  // Pre-compute the base phase's ACTUAL (capped) volume trajectory, rather than assuming it
+  // reaches baseTargetVol on schedule. A short base window covering a lot of ground can't
+  // always get there in time once week-to-week growth is safely capped - the build phase
+  // needs to hand off from wherever the base phase truly ends up, not the theoretical target,
+  // or the same discontinuity this was meant to fix reappears at the base/build boundary.
+  const baseVolTrajectory=[];
+  if(baseW){
+    let prev=i.recentWeeklyKm;
+    for(let bwk=1; bwk<=baseW; bwk++){
+      const uncapped=i.recentWeeklyKm+(baseTargetVol-i.recentWeeklyKm)*((bwk-1)/Math.max(1,baseW-1));
+      const capped=bwk>1?Math.min(uncapped,prev*(1+PLAN_R.MAX_WEEKLY_VOL_JUMP_PCT)):uncapped;
+      baseVolTrajectory.push(capped);
+      prev=capped;
+    }
+  }
   // How many weeks does the ramp actually NEED, at a safe pace, to get from wherever the
   // base phase leaves off up to peak volume and peak long run? Whichever needs more weeks
   // sets the ramp length - the other one just arrives early and holds. Any build weeks left
   // over after that become a genuine hold-near-peak phase, not a slower ramp.
-  const rampStartVol=baseW?baseTargetVol:i.recentWeeklyKm;
+  const rampStartVol=baseW?baseVolTrajectory[baseVolTrajectory.length-1]:i.recentWeeklyKm;
   // The base phase (if any) already grows the long run on its own trend (see the 'isBase'
   // branch below: recentLongestKm + 0.5km/week, capped at 80% of ceiling). The build-phase
   // line needs to continue from THAT point, not restart from the original pre-block number,
@@ -1574,13 +1609,13 @@ function planGenerate(i){
     const isBase=w<=baseW,isTaper=w>structW,isRace=w===i.weeks,bw=w-baseW;
     let vol,label,deload=false,ph,lr,rpKm=0;
     if(isBase){ph='base';
-      const baseVolAt = (wv) => i.recentWeeklyKm+(baseTargetVol-i.recentWeeklyKm)*((wv-1)/Math.max(1,baseW-1));
-      vol=baseVolAt(w);
+      const uncapped=baseVolTrajectory[w-1];
+      vol=uncapped;
       deload=(w%planDeloadCadence(i)===0);
       if(deload){
         vol*=planDeloadDepth(w,baseW);
-        const nextOnTrackVol = (w<baseW) ? baseVolAt(w+1) : rampStartVol; // last base week hands off into build's own starting point
-        vol = Math.max(vol, nextOnTrackVol/(1+PLAN_R.MAX_WEEKLY_VOL_JUMP_PCT));
+        const nextOnTrackVol = (w<baseW) ? baseVolTrajectory[w] : rampStartVol; // last base week hands off into build's own starting point
+        vol = applyDeloadVolumeFloor(vol, nextOnTrackVol);
       }
       label=deload?'Base (deload)':'Base';
       lr=Math.round(Math.min(i.recentLongestKm+w*0.5,ceil*0.8));}
@@ -1596,7 +1631,7 @@ function planGenerate(i){
         // Cap how deep the dip goes so recovery next week can't itself be an unsafe jump -
         // the same reasoning already applied to the long run's own deload floor.
         const nextOnTrackVol = volAt(bw+1);
-        vol = Math.max(vol, nextOnTrackVol/(1+PLAN_R.MAX_WEEKLY_VOL_JUMP_PCT));
+        vol = applyDeloadVolumeFloor(vol, nextOnTrackVol);
       }
       label=deload?'Build (deload)':`Build (${ph})`;
       const onTrack = bw<=rampW ? line[bw-1] : ceil;
@@ -1621,7 +1656,6 @@ function planGenerate(i){
       vol=Math.round(vol*ramp);
       lr=Math.round(lr*ramp);
     }
-    if(!isRace) lr=Math.min(lr,Math.floor(vol*C.lrPctGuard));
     if(!isTaper&&weeks.length){
       const prevMax=Math.max(...weeks.map(x=>x.lr),i.recentLongestKm);
       lr=Math.min(lr,prevMax+PLAN_R.LR_WEEKLY_GAIN+0.5);
@@ -1910,9 +1944,9 @@ const DEFAULT_MARATHON_PLAN = [
     Thu:d('Easy',4,'Easy pace \u2014 recovery week, keep it relaxed'), Fri:REST_DAY, Sat:REST_DAY,
     Sun:d('Long',9,'Easy effort \u2014 recovery week') } },
   { weekNum:4, monday:'2026-09-14', note:'+Saturday', days:{
-    Mon:REST_DAY, Tue:d('Easy',5,'Conversational effort throughout'), Wed:REST_DAY,
-    Thu:d('Easy',5,'Conversational effort throughout'), Fri:REST_DAY, Sat:d('Easy',5,'Easy pace, new 4th day \u2014 keep it relaxed'),
-    Sun:d('Long',12,'Steady, easy effort') } },
+    Mon:REST_DAY, Tue:d('Easy',4,'Conversational effort throughout'), Wed:REST_DAY,
+    Thu:d('Easy',4,'Conversational effort throughout'), Fri:REST_DAY, Sat:d('Easy',4,'Easy pace, new 4th day \u2014 keep it relaxed'),
+    Sun:d('Long',11,'Steady, easy effort') } },
   { weekNum:5, monday:'2026-09-21', note:'', days:{
     Mon:REST_DAY, Tue:d('Easy',6,'Conversational effort throughout'), Wed:REST_DAY,
     Thu:d('Easy',6,'Easy pace, finish with 4 x 20sec relaxed strides \u2014 first taste of faster turnover'), Fri:REST_DAY, Sat:d('Easy',5,'Easy pace'),
@@ -1922,9 +1956,9 @@ const DEFAULT_MARATHON_PLAN = [
     Thu:d('Easy',5,'Easy pace, 4 x 20sec strides'), Fri:REST_DAY, Sat:d('Easy',4,'Easy pace \u2014 recovery week'),
     Sun:d('Long',11,'Easy effort \u2014 recovery week') } },
   { weekNum:7, monday:'2026-10-05', note:'First tempo', days:{
-    Mon:REST_DAY, Tue:d('Easy',7,'Conversational effort throughout'), Wed:REST_DAY,
-    Thu:d('Tempo',6,'2km easy warm-up, 3km @ tempo pace, 1km easy cooldown \u2014 first real tempo session'), Fri:REST_DAY, Sat:d('Easy',6,'Easy pace'),
-    Sun:d('Long',16,'Steady, easy effort') } },
+    Mon:REST_DAY, Tue:d('Easy',6,'Conversational effort throughout'), Wed:REST_DAY,
+    Thu:d('Tempo',6,'2km easy warm-up, 3km @ tempo pace, 1km easy cooldown \u2014 first real tempo session'), Fri:REST_DAY, Sat:d('Easy',5,'Easy pace'),
+    Sun:d('Long',14,'Steady, easy effort') } },
   { weekNum:8, monday:'2026-10-12', note:'', days:{
     Mon:REST_DAY, Tue:d('Easy',7,'Conversational effort throughout'), Wed:REST_DAY,
     Thu:d('Tempo',7,'2km easy warm-up, 4km @ tempo pace, 1km easy cooldown'), Fri:REST_DAY, Sat:d('Easy',6,'Easy pace'),
@@ -1934,21 +1968,21 @@ const DEFAULT_MARATHON_PLAN = [
     Thu:d('Easy',5,'Easy pace, 4 x 20sec strides'), Fri:REST_DAY, Sat:d('Easy',5,'Easy pace \u2014 recovery week'),
     Sun:d('Long',13,'Easy effort \u2014 recovery week') } },
   { weekNum:10, monday:'2026-10-26', note:'+Wednesday, first intervals', days:{
-    Mon:REST_DAY, Tue:d('Interval',6,'2km easy warm-up, 6 x 400m @ interval pace with 200m jog recovery, 1km easy cooldown \u2014 first real interval session'), Wed:d('Easy',5,'Easy pace, new 5th day'),
-    Thu:d('Tempo',7,'2km easy warm-up, 4km @ tempo pace, 1km easy cooldown'), Fri:REST_DAY, Sat:d('Easy',6,'Easy pace'),
-    Sun:d('Long',19,'Steady, easy effort') } },
+    Mon:REST_DAY, Tue:d('Interval',6,'2km easy warm-up, 6 x 400m @ interval pace with 200m jog recovery, 1km easy cooldown \u2014 first real interval session'), Wed:d('Easy',4,'Easy pace, new 5th day'),
+    Thu:d('Tempo',7,'2km easy warm-up, 4km @ tempo pace, 1km easy cooldown'), Fri:REST_DAY, Sat:d('Easy',3,'Easy pace'),
+    Sun:d('Long',17,'Steady, easy effort') } },
   { weekNum:11, monday:'2026-11-02', note:'', days:{
     Mon:REST_DAY, Tue:d('Interval',7,'2km easy warm-up, 8 x 400m @ interval pace with 200m jog recovery, 1km easy cooldown'), Wed:d('Easy',6,'Easy pace'),
     Thu:d('Tempo',7,'2km easy warm-up, 4km @ tempo pace, 1km easy cooldown'), Fri:REST_DAY, Sat:d('Easy',6,'Easy pace'),
     Sun:d('Long',22,'Steady effort \u2014 last 3km slightly quicker if it feels good, but not required') } },
   { weekNum:12, monday:'2026-11-09', note:'Deload', days:{
-    Mon:REST_DAY, Tue:d('Easy',5,'Easy pace \u2014 recovery week'), Wed:d('Easy',5,'Easy pace \u2014 recovery week'),
-    Thu:d('Easy',5,'Easy pace \u2014 recovery week'), Fri:REST_DAY, Sat:d('Easy',5,'Easy pace \u2014 recovery week'),
-    Sun:d('Long',15,'Easy effort \u2014 recovery week') } },
+    Mon:REST_DAY, Tue:d('Easy',6,'Easy pace \u2014 recovery week'), Wed:d('Easy',5,'Easy pace \u2014 recovery week'),
+    Thu:d('Easy',6,'Easy pace \u2014 recovery week'), Fri:REST_DAY, Sat:d('Easy',5,'Easy pace \u2014 recovery week'),
+    Sun:d('Long',19,'Easy effort \u2014 recovery week') } },
   { weekNum:13, monday:'2026-11-16', note:'Peak long run', days:{
-    Mon:REST_DAY, Tue:d('Interval',6,'2km easy warm-up, 6 x 600m @ interval pace with 300m jog recovery, 1km easy cooldown'), Wed:d('Easy',5,'Easy pace'),
-    Thu:d('Tempo',6,'2km easy warm-up, 3km @ tempo pace, 1km easy cooldown'), Fri:REST_DAY, Sat:d('Easy',5,'Easy pace'),
-    Sun:d('Long',28,'Steady effort \u2014 longest run of the plan. Practice your actual race-day fuelling and kit here') } },
+    Mon:REST_DAY, Tue:d('Interval',6,'2km easy warm-up, 6 x 600m @ interval pace with 300m jog recovery, 1km easy cooldown'), Wed:d('Easy',6,'Easy pace'),
+    Thu:d('Tempo',6,'2km easy warm-up, 3km @ tempo pace, 1km easy cooldown'), Fri:REST_DAY, Sat:d('Easy',7,'Easy pace'),
+    Sun:d('Long',25,'Steady effort \u2014 longest run of the plan. Practice your actual race-day fuelling and kit here') } },
   { weekNum:14, monday:'2026-11-23', note:'Taper', days:{
     Mon:REST_DAY, Tue:d('Easy',5,'Easy pace, 4 x 20sec strides to stay sharp'), Wed:REST_DAY,
     Thu:d('Easy',4,'Easy pace \u2014 taper begins, volume drops'), Fri:REST_DAY, Sat:d('Easy',4,'Easy pace'),
